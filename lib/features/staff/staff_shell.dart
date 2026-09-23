@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/error/app_error.dart';
+import '../../core/notifications/local_notifier.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../data/models/models.dart';
+import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/catalog_repository.dart';
-import '../../data/repositories/notification_repository.dart';
 import '../../widgets/app_widgets.dart';
+import '../shared/notification_center.dart';
 import '../shared/notification_sheet.dart';
 import 'management_tab.dart';
 import 'queue_tab.dart';
@@ -32,22 +36,47 @@ class StaffShell extends StatefulWidget {
   State<StaffShell> createState() => _StaffShellState();
 }
 
-class _StaffShellState extends State<StaffShell> {
+class _StaffShellState extends State<StaffShell>
+    with SingleTickerProviderStateMixin {
   final CatalogRepository _catalog = CatalogRepository();
-  final NotificationRepository _notifications = NotificationRepository();
+  final AuthRepository _auth = AuthRepository();
+  late final NotificationCenter _notifications =
+      NotificationCenter(profile: widget.profile);
+  late final TabController _tabs = TabController(length: 4, vsync: this);
+  StreamSubscription<String>? _taps;
 
   List<Cafeteria>? _cafeterias;
   Cafeteria? _selected;
   Object? _error;
-  DateTime? _lastSeen;
+
+  static const _queueTab = 0;
 
   @override
   void initState() {
     super.initState();
     _load();
-    _notifications.lastSeen().then((value) {
-      if (mounted) setState(() => _lastSeen = value);
-    });
+    _notifications.start();
+
+    // A tapped "New order" notification opens the queue — including the one
+    // that launched the app.
+    _taps = LocalNotifier.instance.taps.listen((_) => _openQueue());
+    if (LocalNotifier.instance.takeLaunchPayload() != null) {
+      _tabs.index = _queueTab;
+    }
+  }
+
+  void _openQueue() {
+    if (!mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    _tabs.animateTo(_queueTab);
+  }
+
+  @override
+  void dispose() {
+    _taps?.cancel();
+    _notifications.dispose();
+    _tabs.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -57,7 +86,11 @@ class _StaffShellState extends State<StaffShell> {
       if (!mounted) return;
       setState(() {
         _cafeterias = list;
-        _selected = list.isEmpty ? null : list.first;
+        // Keep the current choice across a reload when it is still allowed.
+        _selected = list.isEmpty
+            ? null
+            : list.firstWhere((c) => c.id == _selected?.id,
+                orElse: () => list.first);
       });
     } catch (error) {
       if (!mounted) return;
@@ -110,6 +143,7 @@ class _StaffShellState extends State<StaffShell> {
           message: AppError.from(_error!).message,
           onRetry: _load,
         ),
+        bottomNavigationBar: _signOutBar(),
       );
     }
 
@@ -122,79 +156,68 @@ class _StaffShellState extends State<StaffShell> {
 
     final selected = _selected!;
 
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        appBar: AppBar(
-          title: _CafeteriaPicker(
-            cafeterias: cafeterias,
-            selected: selected,
-            onChanged: (c) => setState(() => _selected = c),
-          ),
-          actions: [
-            _bell(),
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Queue'),
-              Tab(text: 'Menu'),
-              Tab(text: 'Specials'),
-              Tab(text: 'Settings'),
-            ],
-          ),
+    return Scaffold(
+      appBar: AppBar(
+        title: _CafeteriaPicker(
+          cafeterias: cafeterias,
+          selected: selected,
+          onChanged: (c) => setState(() => _selected = c),
         ),
-        body: Column(
-          children: [
-            _TradingToggle(
-              cafeteria: selected,
-              onChanged: _toggleTrading,
-            ),
-            Expanded(
-              child: TabBarView(
-                // The inner order-status tabs used to be a second swipeable
-                // TabBarView nested inside this one, so horizontal drags were
-                // ambiguous. The inner one is now a filter chip row.
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  QueueTab(cafeteria: selected),
-                  ManagementTab(cafeteria: selected),
-                  SpecialsTab(cafeteria: selected),
-                  SettingsTab(
-                    profile: widget.profile,
-                    cafeteria: selected,
-                    onCafeteriaChanged: _replaceCafeteria,
-                  ),
-                ],
-              ),
-            ),
+        actions: [
+          NotificationBell(center: _notifications, onOpenOrders: _openQueue),
+          const SizedBox(width: AppSpacing.sm),
+        ],
+        bottom: TabBar(
+          controller: _tabs,
+          tabs: const [
+            Tab(icon: Icon(Icons.receipt_long_outlined, size: 20), text: 'Queue'),
+            Tab(icon: Icon(Icons.restaurant_menu, size: 20), text: 'Menu'),
+            Tab(icon: Icon(Icons.local_offer_outlined, size: 20), text: 'Specials'),
+            Tab(icon: Icon(Icons.settings_outlined, size: 20), text: 'Settings'),
           ],
         ),
+      ),
+      body: Column(
+        children: [
+          _TradingToggle(
+            cafeteria: selected,
+            onChanged: _toggleTrading,
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabs,
+              // The inner order-status tabs used to be a second swipeable
+              // TabBarView nested inside this one, so horizontal drags were
+              // ambiguous. The inner one is now a filter chip row.
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                QueueTab(cafeteria: selected),
+                ManagementTab(cafeteria: selected),
+                SpecialsTab(cafeteria: selected),
+                SettingsTab(
+                  profile: widget.profile,
+                  cafeteria: selected,
+                  notifications: _notifications,
+                  onCafeteriaChanged: _replaceCafeteria,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _bell() => StreamBuilder<List<AppNotification>>(
-        stream: _notifications.watch(UserRole.staff),
-        builder: (context, snapshot) {
-          final notices = snapshot.data ?? const <AppNotification>[];
-          final unread = NotificationRepository.hasUnread(notices, _lastSeen);
-
-          return IconButton(
-            tooltip: unread ? 'Notices, unread' : 'Notices',
-            onPressed: () async {
-              final seenAt = await _notifications.markSeen();
-              if (!mounted) return;
-              setState(() => _lastSeen = seenAt);
-              if (!context.mounted) return;
-              await showNotificationSheet(context, notices);
-            },
-            icon: Badge(
-              isLabelVisible: unread,
-              child: const Icon(Icons.notifications_outlined),
-            ),
-          );
-        },
+  /// An unassigned or failing staff account must still be able to leave.
+  Widget _signOutBar() => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.gutter),
+          child: TextButton.icon(
+            onPressed: _auth.signOut,
+            icon: const Icon(Icons.logout),
+            label: const Text('Sign out'),
+          ),
+        ),
       );
 
   Widget _noAccess() => Scaffold(
@@ -204,13 +227,15 @@ class _StaffShellState extends State<StaffShell> {
           title: 'No cafeteria assigned yet',
           message: 'Your account is set up, but an administrator still needs to '
               'assign you to a cafeteria before you can manage a menu or see '
-              'orders.',
+              'orders. Your staff number is '
+              '${widget.profile.studentStaffId ?? 'not set'}.',
           action: OutlinedButton.icon(
             onPressed: _load,
             icon: const Icon(Icons.refresh),
             label: const Text('Check again'),
           ),
         ),
+        bottomNavigationBar: _signOutBar(),
       );
 }
 

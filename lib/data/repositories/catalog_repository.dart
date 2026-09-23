@@ -104,14 +104,6 @@ class CatalogRepository {
       .order('name')
       .map((rows) => rows.map(Cafeteria.fromMap).toList());
 
-  /// REQ-38 / REQ-39: live menu for one cafeteria, name ascending.
-  Stream<List<MenuItem>> watchMenu(String cafeteriaId) => _client
-      .from('menu_items')
-      .stream(primaryKey: ['id'])
-      .eq('cafeteria_id', cafeteriaId)
-      .order('name')
-      .map((rows) => rows.map(MenuItem.fromMap).toList());
-
   Future<List<Cafeteria>> fetchCafeterias() async {
     final rows = await _client.from('cafeterias').select().order('name');
     return rows.map<Cafeteria>((r) => Cafeteria.fromMap(r)).toList();
@@ -479,7 +471,9 @@ class CatalogRepository {
     final objectPath = Uri.decodeComponent(
       publicUrl.substring(index + marker.length).split('?').first,
     );
-    if (objectPath.isEmpty) return;
+    // Demo photos under seed/ are shared by several stores' items; deleting
+    // one item must not take the photo from the others.
+    if (objectPath.isEmpty || objectPath.startsWith('seed/')) return;
 
     try {
       await _client.storage.from('menu-images').remove([objectPath]);

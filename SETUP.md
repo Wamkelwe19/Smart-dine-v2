@@ -61,6 +61,20 @@ finish before starting the next:
 0006_rls.sql                   row level security on every table
 0007_storage_policies.sql      menu-images bucket policies
 0008_specials_and_cafeteria_images.sql   specials, discounted checkout, hall photos
+0009_varieties_combos_categories.sql     flavours/sizes, combos, category tabs
+0010_repair_orders.sql         brings old orders/order_items tables up to date
+0011_user_notifications.sql    order-status notifications, Google profile details
+```
+
+> **0010 is what makes ordering work on the hosted project.** Its `orders` and
+> `order_items` tables predate these migrations, so 0003 skipped them and every
+> checkout failed with `column "payment_method" does not exist` (shown in the
+> app as "Something went wrong"). 0010 repairs them in place.
+
+Then confirm everything is in place (read-only):
+
+```
+supabase/checks/health_check.sql   every row should say OK
 ```
 
 Dining-hall photos can also be bundled with the app: see
@@ -101,6 +115,20 @@ select p.id, c.id
 ```
 
 > **If a staff member reports "No cafeteria assigned yet", this step is why.**
+
+### 2d. Demo menu (optional)
+
+`supabase/seed/seed_menu.sql` adds at least six items with photos to each of
+the three halls, with flavours, sizes, one combo and one special per hall, and
+a cover photo for each. It never overwrites an existing item. The photos are
+already in the `menu-images` bucket under `seed/`; credits are in
+`supabase/seed/images/CREDITS.md`.
+
+### 2e. Assign staff to their cafeteria
+
+`supabase/seed/grant_staff_access.sql` lists staff accounts and cafeterias, and
+has the one-line insert to assign them. Without an assignment a staff member
+sees "No cafeteria assigned yet" and gets no order notifications.
 
 ---
 
@@ -167,13 +195,25 @@ supabase functions deploy paystack-verify
 supabase functions deploy paystack-webhook --no-verify-jwt
 ```
 
-`--no-verify-jwt` on the webhook only — Paystack calls it, not a signed-in user,
-so it authenticates by HMAC signature instead.
+```bash
+supabase functions deploy paystack-return --no-verify-jwt
+```
+
+`paystack-return` is where Paystack sends the browser after payment: it
+bounces back into the app with the payment reference (Paystack only accepts
+an https callback, not the app's own link). All four are already deployed on
+the hosted project; until `PAYSTACK_SECRET_KEY` is set they answer
+`PAYSTACK_NOT_CONFIGURED`, which the app shows as "Card payment isn't
+available yet" — cash keeps working.
+
+`--no-verify-jwt` on the webhook and the return page only: Paystack calls them,
+not a signed-in user. The webhook authenticates by HMAC signature instead, and
+the return page reads and writes nothing.
 
 ### 4c. Set the secret key
 
 ```bash
-supabase secrets set PAYSTACK_SECRET_KEY=sk_test_your_key_here
+supabase secrets set PAYSTACK_SECRET_KEY=sk_test_your_key_here --project-ref sotsfjzdbnmrfcdifwmi
 ```
 
 **The secret key never goes in `env.json`, in the app, or in this repository.**
@@ -221,7 +261,13 @@ za.ac.ump.smartdine://login-callback
 ### 5c. The app
 
 Put the web client ID into `env.json` as `GOOGLE_WEB_CLIENT_ID`. The
-"Continue with Google" button appears once it is non-empty.
+"Continue with Google" button appears once it is non-empty. (The ID itself is
+used by Supabase, not the app; the value only switches the button on.)
+
+Sign-in opens in an in-app browser tab and returns to the app automatically.
+The new account arrives with first name, surname, email and Google photo
+filled in (migration 0011); only the student/staff number, phone and role are
+asked for.
 
 The deep-link plumbing is already in place: the `za.ac.ump.smartdine` scheme is
 registered in `AndroidManifest.xml` and `Info.plist`, and PKCE is enabled in

@@ -271,6 +271,17 @@ class _QueueTabState extends State<QueueTab> {
       );
 }
 
+/// Handing over an unpaid cash order also takes the payment, so the button
+/// says so.
+String _advanceLabel(Order order) {
+  if (order.status == OrderStatus.ready &&
+      order.paymentMethod == PaymentMethod.cash &&
+      order.paymentState != PaymentState.paid) {
+    return 'Collected · ${order.totalLabel} cash received';
+  }
+  return order.status.advanceLabel ?? 'Done';
+}
+
 class _OrderCard extends StatelessWidget {
   const _OrderCard({
     required this.order,
@@ -290,9 +301,16 @@ class _OrderCard extends StatelessWidget {
 
     return Card(
       elevation: AppElevation.none,
+      margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.cardRadius,
-        side: BorderSide(color: theme.colorScheme.outline),
+        // New orders stand out until someone starts on them.
+        side: BorderSide(
+          color: order.status == OrderStatus.isNew
+              ? theme.colorScheme.primary
+              : theme.colorScheme.outline,
+          width: order.status == OrderStatus.isNew ? 2 : 1,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -317,14 +335,33 @@ class _OrderCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(width: AppSpacing.sm),
                 StatusPill(
-                  label: order.paymentState == PaymentState.paid
-                      ? 'Paid'
-                      : 'Pay at counter',
-                  tone: order.paymentState == PaymentState.paid
-                      ? StatusTone.positive
-                      : StatusTone.warning,
+                  label: order.status.label,
+                  tone: switch (order.status) {
+                    OrderStatus.isNew => StatusTone.neutral,
+                    OrderStatus.preparing => StatusTone.warning,
+                    _ => StatusTone.positive,
+                  },
+                  icon: switch (order.status) {
+                    OrderStatus.isNew => Icons.fiber_new_outlined,
+                    OrderStatus.preparing => Icons.soup_kitchen_outlined,
+                    _ => Icons.notifications_active_outlined,
+                  },
+                  dense: true,
+                ),
+                const Spacer(),
+                // Card orders awaiting Paystack are not "pay at counter".
+                StatusPill(
+                  label: order.paymentLabel,
+                  tone: switch (order.paymentState) {
+                    PaymentState.paid => StatusTone.positive,
+                    PaymentState.failed => StatusTone.negative,
+                    _ => StatusTone.warning,
+                  },
+                  icon: order.paymentMethod == PaymentMethod.card
+                      ? Icons.credit_card
+                      : Icons.payments_outlined,
                   dense: true,
                 ),
               ],
@@ -393,7 +430,7 @@ class _OrderCard extends StatelessWidget {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2.5, color: Colors.white),
                           )
-                        : Text(order.status.advanceLabel ?? 'Done'),
+                        : Text(_advanceLabel(order)),
                   ),
                 ),
               ],

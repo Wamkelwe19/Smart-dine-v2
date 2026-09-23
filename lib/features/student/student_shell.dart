@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
+import '../../core/notifications/local_notifier.dart';
 import '../../data/models/models.dart';
+import '../shared/notification_center.dart';
 import 'cart_controller.dart';
 import 'cart_tab.dart';
 import 'home_tab.dart';
@@ -32,17 +36,38 @@ class StudentShell extends StatefulWidget {
 
 class _StudentShellState extends State<StudentShell> {
   final CartController _cart = CartController();
+  late final NotificationCenter _notifications =
+      NotificationCenter(profile: widget.profile);
+  StreamSubscription<String>? _taps;
   int _index = 0;
+
+  static const _ordersTab = 2;
 
   @override
   void initState() {
     super.initState();
     // REQ-52: picks up any cart left over from a previous session.
     _cart.load();
+    _notifications.start();
+
+    // A tapped order notification opens Orders — including the one that
+    // launched the app.
+    _taps = LocalNotifier.instance.taps.listen(_openFromNotification);
+    final launch = LocalNotifier.instance.takeLaunchPayload();
+    if (launch != null) _index = _ordersTab;
+  }
+
+  void _openFromNotification(String payload) {
+    if (!mounted) return;
+    // Close anything pushed over the shell (a hall page, a sheet).
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    _goToTab(_ordersTab);
   }
 
   @override
   void dispose() {
+    _taps?.cancel();
+    _notifications.dispose();
     _cart.dispose();
     super.dispose();
   }
@@ -61,6 +86,8 @@ class _StudentShellState extends State<StudentShell> {
                 profile: widget.profile,
                 cart: _cart,
                 onViewCart: () => _goToTab(1),
+                notifications: _notifications,
+                onViewOrders: () => _goToTab(_ordersTab),
               ),
               CartTab(
                 cart: _cart,
@@ -68,7 +95,10 @@ class _StudentShellState extends State<StudentShell> {
                 onOrderPlaced: () => _goToTab(2),
               ),
               OrdersTab(profile: widget.profile),
-              ProfileTab(profile: widget.profile),
+              ProfileTab(
+                profile: widget.profile,
+                notifications: _notifications,
+              ),
             ],
           ),
           Align(

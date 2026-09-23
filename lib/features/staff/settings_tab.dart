@@ -9,6 +9,8 @@ import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/catalog_repository.dart';
 import '../../data/repositories/notification_repository.dart';
 import '../../widgets/cafeteria_image.dart';
+import '../shared/notification_center.dart';
+import '../shared/notification_settings_screen.dart';
 
 /// Staff settings, and the notice composer.
 ///
@@ -20,11 +22,13 @@ class SettingsTab extends StatefulWidget {
     super.key,
     required this.profile,
     required this.cafeteria,
+    required this.notifications,
     this.onCafeteriaChanged,
   });
 
   final Profile profile;
   final Cafeteria cafeteria;
+  final NotificationCenter notifications;
 
   /// Called after the cover photo changes, so the shell holds the new value.
   final ValueChanged<Cafeteria>? onCafeteriaChanged;
@@ -91,6 +95,28 @@ class _SettingsTabState extends State<SettingsTab> {
           onPressed: _compose,
           icon: const Icon(Icons.campaign_outlined),
           label: const Text('Write a notice'),
+        ),
+
+        const SizedBox(height: AppSpacing.xxl),
+        Text('Notifications', style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        Card(
+          elevation: AppElevation.none,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.cardRadius,
+            side: BorderSide(color: theme.colorScheme.outline),
+          ),
+          child: ListTile(
+            leading: const Icon(Icons.notifications_outlined),
+            title: const Text('Notification settings'),
+            subtitle: const Text('New orders, cancellations, sound'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) =>
+                  NotificationSettingsScreen(center: widget.notifications),
+            )),
+          ),
         ),
 
         const SizedBox(height: AppSpacing.xxl),

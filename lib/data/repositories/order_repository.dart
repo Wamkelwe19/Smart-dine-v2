@@ -113,7 +113,7 @@ class OrderRepository {
   Future<Order> fetchOrderDetail(String orderId) async {
     final row = await _client
         .from('orders')
-        .select('*, order_items(*), cafeterias(name)')
+        .select('*, order_items!order_id(*), cafeterias!cafeteria_id(name)')
         .eq('id', orderId)
         .single();
     return Order.fromMap(row);
@@ -138,7 +138,7 @@ class OrderRepository {
   Future<List<Order>> fetchQueueWithItems(String cafeteriaId) async {
     final rows = await _client
         .from('orders')
-        .select('*, order_items(*), profiles(name)')
+        .select('*, order_items!order_id(*), profiles!student_id(name)')
         .eq('cafeteria_id', cafeteriaId)
         .inFilter('status', ['new', 'preparing', 'ready'])
         .order('created_at');

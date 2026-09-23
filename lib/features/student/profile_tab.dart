@@ -5,15 +5,22 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../shared/notification_center.dart';
+import '../shared/notification_settings_screen.dart';
 
 /// REQ-114 and the rest of TBD-12.
 ///
 /// This tab previously rendered `Center(Text('Profile Content'))` in white on a
 /// white background — indistinguishable from a blank screen.
 class ProfileTab extends StatefulWidget {
-  const ProfileTab({super.key, required this.profile});
+  const ProfileTab({
+    super.key,
+    required this.profile,
+    required this.notifications,
+  });
 
   final Profile profile;
+  final NotificationCenter notifications;
 
   @override
   State<ProfileTab> createState() => _ProfileTabState();
@@ -83,6 +90,13 @@ class _ProfileTabState extends State<ProfileTab> {
                 CircleAvatar(
                   radius: 44,
                   backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  // The Google photo when there is one; initials underneath
+                  // while it loads or if it fails.
+                  foregroundImage: profile.avatarUrl == null
+                      ? null
+                      : NetworkImage(profile.avatarUrl!),
+                  onForegroundImageError:
+                      profile.avatarUrl == null ? null : (_, _) {},
                   child: Text(
                     _initials(profile),
                     style: theme.textTheme.headlineMedium
@@ -118,6 +132,28 @@ class _ProfileTabState extends State<ProfileTab> {
             icon: Icons.phone_outlined,
             label: 'Phone',
             value: profile.phone ?? 'Not set',
+          ),
+
+          const SizedBox(height: AppSpacing.xl),
+          Text('Settings', style: theme.textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          Card(
+            elevation: AppElevation.none,
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.cardRadius,
+              side: BorderSide(color: theme.colorScheme.outline),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.notifications_outlined),
+              title: const Text('Notifications'),
+              subtitle: const Text('Order updates, sound and announcements'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) =>
+                    NotificationSettingsScreen(center: widget.notifications),
+              )),
+            ),
           ),
 
           const SizedBox(height: AppSpacing.xl),

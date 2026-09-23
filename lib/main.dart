@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config/app_config.dart';
+import 'core/notifications/local_notifier.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_gate.dart';
 
@@ -22,6 +23,9 @@ Future<void> main() async {
         authFlowType: AuthFlowType.pkce,
       ),
     );
+
+    // Order-update notifications. Never blocks start-up if it fails.
+    await LocalNotifier.instance.init();
   } catch (error) {
     // A misconfigured build should explain itself on screen rather than dying
     // at a grey crash with the reason only in the console.

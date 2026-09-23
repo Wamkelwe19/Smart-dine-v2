@@ -60,13 +60,4 @@ class NotificationRepository {
     await prefs.setString(_lastSeenKey, now.toIso8601String());
     return now;
   }
-
-  /// REQ-87.
-  static bool hasUnread(List<AppNotification> notices, DateTime? lastSeen) {
-    if (notices.isEmpty) return false;
-    if (lastSeen == null) return true;
-    return notices.any(
-      (notice) => notice.createdAt != null && notice.createdAt!.isAfter(lastSeen),
-    );
-  }
 }
