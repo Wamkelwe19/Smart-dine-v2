@@ -1,0 +1,311 @@
+# UMP Smart Dine — Setup
+
+Everything needed to get the app running from a clean checkout, in order.
+Budget about 45 minutes the first time.
+
+If you only want to run it against the existing database with cash checkout,
+**Steps 1–3 are enough.** Steps 4 and 5 add card payment and Google sign-in.
+
+---
+
+## ⚠️ Step 0 — Rotate the Supabase keys first
+
+The project's **secret key** and **service-role JWT** were pasted into a chat
+transcript. The service-role key bypasses row level security entirely — it is
+full read/write access to every table.
+
+1. Supabase dashboard → **Project Settings → API**
+2. Roll the **secret key** and the **service_role** JWT
+3. Update anywhere they were used (only Edge Function secrets should hold them)
+
+The **publishable key** (`sb_publishable_…`) is fine in the app — it is in every
+compiled binary anyway. Row level security is what protects the data, which is
+why Step 2 matters.
+
+---
+
+## Step 1 — Prerequisites
+
+| Tool | Version | Check |
+|---|---|---|
+| Flutter | 3.38.4+ | `flutter --version` |
+| Dart | 3.11.4+ | bundled with Flutter |
+| Android Studio / Xcode | for device builds | `flutter doctor` |
+| Supabase CLI | optional, for Step 2b and 4 | `supabase --version` |
+
+```bash
+flutter doctor
+```
+
+Resolve anything `flutter doctor` reports as an error before continuing.
+
+---
+
+## Step 2 — Database
+
+The schema now lives in `supabase/migrations/` rather than only in the hosted
+dashboard. The files are **idempotent**, so they are safe to run against the
+existing project: they create what is missing and leave your data alone.
+
+### 2a. Apply the migrations (dashboard — no tooling needed)
+
+Open the Supabase **SQL Editor** and run each file in order, waiting for each to
+finish before starting the next:
+
+```
+0001_baseline.sql              existing tables, constraints, defaults
+0002_money_in_cents.sql        price_cents + sync trigger
+0003_orders.sql                orders, order_items, payments, reservations
+0004_stock_and_order_rpcs.sql  atomic stock + order lifecycle
+0005_auth_hardening.sql        secure login lookup, profile trigger
+0006_rls.sql                   row level security on every table
+0007_storage_policies.sql      menu-images bucket policies
+0008_specials_and_cafeteria_images.sql   specials, discounted checkout, hall photos
+```
+
+Dining-hall photos can also be bundled with the app: see
+`assets/dining/README.txt` for the file naming.
+
+### 2b. Or with the CLI
+
+```bash
+supabase link --project-ref sotsfjzdbnmrfcdifwmi
+supabase db push
+```
+
+### 2c. Two manual steps that the migrations cannot do for you
+
+**Schedule the abandoned-cart sweep.** Without this, stock reserved by a
+student who closes the app is never returned.
+
+```sql
+create extension if not exists pg_cron with schema extensions;
+select cron.schedule(
+  'release-expired-reservations',
+  '*/5 * * * *',
+  $cron$ select public.release_expired_reservations(); $cron$
+);
+```
+
+**Assign each staff member to a cafeteria.** This is the authorisation
+boundary — a staff account can sign in and see the dashboard, but every write is
+refused until a row exists here. That is deliberate: it is what stops anyone who
+self-registers as staff from editing prices.
+
+```sql
+insert into public.staff_cafeterias (staff_id, cafeteria_id)
+select p.id, c.id
+  from public.profiles p, public.cafeterias c
+ where p.student_staff_id = 'YOUR-STAFF-NUMBER'
+   and c.name = 'Your Cafeteria Name';
+```
+
+> **If a staff member reports "No cafeteria assigned yet", this step is why.**
+
+---
+
+## Step 3 — Run the app
+
+Configuration is injected at build time; nothing secret lives in source
+(REQ-112).
+
+```bash
+cp env.example.json env.json
+```
+
+Fill in `env.json` — it is gitignored:
+
+```json
+{
+  "SUPABASE_URL": "https://sotsfjzdbnmrfcdifwmi.supabase.co",
+  "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_...",
+  "PAYSTACK_PUBLIC_KEY": "",
+  "GOOGLE_WEB_CLIENT_ID": "",
+  "GOOGLE_IOS_CLIENT_ID": ""
+}
+```
+
+Then:
+
+```bash
+flutter pub get
+```
+
+```bash
+flutter run --dart-define-from-file=env.json
+```
+
+> Leaving out `--dart-define-from-file` gives a clear startup error naming the
+> missing keys, rather than an opaque Supabase failure on the first query.
+
+Card payment and Google sign-in hide themselves when their keys are blank, so
+the app is fully usable with cash checkout before you do Steps 4 and 5.
+
+---
+
+## Step 4 — Card payment (Paystack)
+
+Free test keys, no merchant account, no approval wait.
+
+### 4a. Get test keys
+
+1. Sign up at [paystack.com](https://paystack.com)
+2. **Settings → API Keys & Webhooks** (stay in **Test Mode**)
+3. Copy the **public** key (`pk_test_…`) into `env.json` as `PAYSTACK_PUBLIC_KEY`
+
+### 4b. Deploy the Edge Functions
+
+```bash
+supabase functions deploy paystack-initialize
+```
+
+```bash
+supabase functions deploy paystack-verify
+```
+
+```bash
+supabase functions deploy paystack-webhook --no-verify-jwt
+```
+
+`--no-verify-jwt` on the webhook only — Paystack calls it, not a signed-in user,
+so it authenticates by HMAC signature instead.
+
+### 4c. Set the secret key
+
+```bash
+supabase secrets set PAYSTACK_SECRET_KEY=sk_test_your_key_here
+```
+
+**The secret key never goes in `env.json`, in the app, or in this repository.**
+It lives only here.
+
+### 4d. Register the webhook
+
+Paystack dashboard → **Settings → API Keys & Webhooks → Webhook URL**:
+
+```
+https://sotsfjzdbnmrfcdifwmi.supabase.co/functions/v1/paystack-webhook
+```
+
+### 4e. Test it
+
+Use Paystack's test card: **4084 0840 8408 4081**, any future expiry, CVV `408`,
+OTP `123456`.
+
+---
+
+## Step 5 — Google sign-in
+
+### 5a. Google Cloud
+
+1. [console.cloud.google.com](https://console.cloud.google.com) → new project
+2. **APIs & Services → OAuth consent screen** → External → fill in the basics
+3. **Credentials → Create credentials → OAuth client ID → Web application**
+4. Under **Authorised redirect URIs** add:
+   ```
+   https://sotsfjzdbnmrfcdifwmi.supabase.co/auth/v1/callback
+   ```
+5. Copy the **Client ID** and **Client secret**
+
+### 5b. Supabase
+
+**Authentication → Providers → Google** → enable, paste the client ID and
+secret, save.
+
+**Authentication → URL Configuration → Redirect URLs** → add:
+
+```
+za.ac.ump.smartdine://login-callback
+```
+
+### 5c. The app
+
+Put the web client ID into `env.json` as `GOOGLE_WEB_CLIENT_ID`. The
+"Continue with Google" button appears once it is non-empty.
+
+The deep-link plumbing is already in place: the `za.ac.ump.smartdine` scheme is
+registered in `AndroidManifest.xml` and `Info.plist`, and PKCE is enabled in
+`main.dart`.
+
+> **First Google sign-in shows a "Finish setting up" screen.** A Google account
+> has no student number and no role, and the app is built around signing in with
+> that number. It is collected once; after that the user is signed in
+> automatically on every launch.
+
+---
+
+## Step 6 — Verify
+
+```bash
+flutter analyze
+```
+
+```bash
+flutter test
+```
+
+Both should be clean: **0 issues, 60 tests passing.**
+
+Then walk these by hand:
+
+| # | Check | Expected |
+|---|---|---|
+| 1 | Sign up, verify email, sign in | Lands on the student home screen |
+| 2 | Kill the app and reopen it | Straight to home, no sign-in |
+| 3 | Add an item to the cart | Stock drops by one immediately on another device |
+| 4 | Two devices take the last unit at once | Exactly one succeeds; stock never goes negative |
+| 5 | Add to cart, force-quit, wait 30 min | Stock returns |
+| 6 | Cash checkout | Collection reference shown; order appears in the staff queue |
+| 7 | Card checkout with the test card | Order shows as paid |
+| 8 | Card checkout, kill app after paying | Webhook still marks it paid |
+| 9 | Staff advances an order | Student sees the status change live |
+| 10 | Sign in as a student, try to edit a price via the REST API | Refused by RLS |
+
+---
+
+## Building for release
+
+```bash
+flutter build apk --release --dart-define-from-file=env.json
+```
+
+> Release builds previously had **no network access at all** — `INTERNET` was
+> declared only in the debug and profile manifests. That is fixed, but it is
+> worth confirming on a real device after any manifest change.
+
+For the Play Store you also need a real signing config; `android/app/build.gradle.kts`
+still signs release with the debug keystore. Google sign-in will not work on a
+release build until the release SHA-1 is registered in Google Cloud.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---| 
+| `Missing build configuration: SUPABASE_URL` | Ran without the env file | Add `--dart-define-from-file=env.json` |
+| Staff sees "No cafeteria assigned yet" | No `staff_cafeterias` row | Step 2c |
+| "You do not have permission to do that" | RLS working as intended | Check the staff binding, or that you are signed in as the right role |
+| Stock never comes back after abandoning a cart | pg_cron not scheduled | Step 2c |
+| Card tab greyed out | `PAYSTACK_PUBLIC_KEY` empty | Step 4a |
+| Google button missing | `GOOGLE_WEB_CLIENT_ID` empty | Step 5c |
+| Google sign-in opens the browser then hangs | Redirect URL not registered | Step 5b |
+| Payment succeeds but the order stays unpaid | Webhook not registered | Step 4d |
+| Release APK cannot reach the network | Manifest missing `INTERNET` | Already fixed; rebuild |
+
+---
+
+## Where things live
+
+```
+lib/
+  core/       config, theme tokens, error handling, formatters/validators
+  data/       typed models and repositories (all Supabase access)
+  features/   auth/ student/ staff/ screens
+  widgets/    shared components
+supabase/
+  migrations/ ordered, idempotent SQL
+  functions/  Paystack Edge Functions
+test/         60 unit tests
+env.json      your local config (gitignored)
+```
