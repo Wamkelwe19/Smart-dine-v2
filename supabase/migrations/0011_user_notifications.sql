@@ -12,6 +12,20 @@
 --   * ensure_profile() — creates a missing profile row for the caller instead
 --     of the app signing them out.
 
+-- 0011 builds on the order columns that 0010 adds. Stop with a clear message
+-- (rather than 'column "payment_state" does not exist') if 0010 has not run.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'orders'
+       and column_name = 'payment_state'
+  ) then
+    raise exception 'Run 0010_repair_orders.sql first, then run this file again.';
+  end if;
+end;
+$$;
+
 -- ------------------------------------------------------------ profiles --
 alter table public.profiles add column if not exists avatar_url text;
 
@@ -117,29 +131,33 @@ security definer
 set search_path = public
 as $$
 declare
-  v_uid  uuid := auth.uid();
-  v_user auth.users;
+  v_uid   uuid := auth.uid();
+  v_email text;
+  v_meta  jsonb;
+  v_found boolean;
 begin
   if v_uid is null then
     raise exception 'AUTH_REQUIRED';
   end if;
 
-  select * into v_user from auth.users where id = v_uid;
-  if v_user.id is null then
+  select true, u.email, u.raw_user_meta_data
+    into v_found, v_email, v_meta
+    from auth.users u
+   where u.id = v_uid;
+
+  if not coalesce(v_found, false) then
     raise exception 'AUTH_REQUIRED';
   end if;
 
-  perform public.create_profile_from_auth(
-    v_user.id, v_user.email, v_user.raw_user_meta_data
-  );
+  perform public.create_profile_from_auth(v_uid, v_email, v_meta);
 
   update public.profiles p
      set avatar_url = coalesce(
            p.avatar_url,
-           nullif(v_user.raw_user_meta_data ->> 'avatar_url', ''),
-           nullif(v_user.raw_user_meta_data ->> 'picture', '')
+           nullif(v_meta ->> 'avatar_url', ''),
+           nullif(v_meta ->> 'picture', '')
          ),
-         email = coalesce(p.email, v_user.email)
+         email = coalesce(p.email, v_email)
    where p.id = v_uid;
 end;
 $$;

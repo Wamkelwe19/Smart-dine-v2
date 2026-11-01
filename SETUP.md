@@ -67,6 +67,17 @@ finish before starting the next:
 0012_yoco_payment_provider.sql Yoco default for new card payments
 ```
 
+> **0010 is what makes ordering work on the hosted project.** Its `orders` and
+> `order_items` tables predate these migrations, so 0003 skipped them and every
+> checkout failed with `column "payment_method" does not exist` (shown in the
+> app as "Something went wrong"). 0010 repairs them in place.
+
+Then confirm everything is in place (read-only):
+
+```
+supabase/checks/health_check.sql   every row should say OK
+```
+
 Dining-hall photos can also be bundled with the app: see
 `assets/dining/README.txt` for the file naming.
 
@@ -105,6 +116,20 @@ select p.id, c.id
 ```
 
 > **If a staff member reports "No cafeteria assigned yet", this step is why.**
+
+### 2d. Demo menu (optional)
+
+`supabase/seed/seed_menu.sql` adds at least six items with photos to each of
+the three halls, with flavours, sizes, one combo and one special per hall, and
+a cover photo for each. It never overwrites an existing item. The photos are
+already in the `menu-images` bucket under `seed/`; credits are in
+`supabase/seed/images/CREDITS.md`.
+
+### 2e. Assign staff to their cafeteria
+
+`supabase/seed/grant_staff_access.sql` lists staff accounts and cafeterias, and
+has the one-line insert to assign them. Without an assignment a staff member
+sees "No cafeteria assigned yet" and gets no order notifications.
 
 ---
 
@@ -149,8 +174,8 @@ flutter run --dart-define-from-file=env.json
 > Leaving out `--dart-define-from-file` gives a clear startup error naming the
 > missing keys, rather than an opaque Supabase failure on the first query.
 
-Card payment and Google sign-in hide themselves when their keys are blank, so
-the app is fully usable with cash checkout before you do Steps 4 and 5.
+Cash checkout works before Yoco is configured. Card checkout is available in
+the app but requires the Edge Functions and Yoco secrets in Step 4.
 
 ---
 
@@ -251,7 +276,13 @@ za.ac.ump.smartdine://login-callback
 ### 5c. The app
 
 Put the web client ID into `env.json` as `GOOGLE_WEB_CLIENT_ID`. The
-"Continue with Google" button appears once it is non-empty.
+"Continue with Google" button appears once it is non-empty. (The ID itself is
+used by Supabase, not the app; the value only switches the button on.)
+
+Sign-in opens in an in-app browser tab and returns to the app automatically.
+The new account arrives with first name, surname, email and Google photo
+filled in (migration 0011); only the student/staff number, phone and role are
+asked for.
 
 The deep-link plumbing is already in place: the `za.ac.ump.smartdine` scheme is
 registered in `AndroidManifest.xml` and `Info.plist`, and PKCE is enabled in
@@ -274,7 +305,7 @@ flutter analyze
 flutter test
 ```
 
-Both should be clean: **0 issues, 60 tests passing.**
+Both should be clean: **0 issues, all tests passing.**
 
 Then walk these by hand:
 
@@ -318,7 +349,7 @@ release build until the release SHA-1 is registered in Google Cloud.
 | "You do not have permission to do that" | RLS working as intended | Check the staff binding, or that you are signed in as the right role |
 | Stock never comes back after abandoning a cart | pg_cron not scheduled | Step 2c |
 | Card checkout does not open | Check the Edge Function deployment and `YOCO_SECRET_KEY` | Step 4 |
-git config --global user.name "Your GitHub Name"| Google button missing | `GOOGLE_WEB_CLIENT_ID` empty | Step 5c |
+| Google button missing | `GOOGLE_WEB_CLIENT_ID` empty | Step 5c |
 | Google sign-in opens the browser then hangs | Redirect URL not registered | Step 5b |
 | Payment succeeds but the order stays unpaid | Webhook not registered or its signing secret is missing | Step 4d |
 | Release APK cannot reach the network | Manifest missing `INTERNET` | Already fixed; rebuild |
@@ -336,6 +367,6 @@ lib/
 supabase/
   migrations/ ordered, idempotent SQL
   functions/  Yoco Checkout API Edge Functions
-test/         60 unit tests
+test/         unit tests
 env.json      your local config (gitignored)
 ```

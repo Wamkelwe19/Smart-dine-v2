@@ -58,25 +58,25 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
 flutter_launcher_icons:
-  android: true
+  android: "ic_launcher"
   ios: true
-  image_path: assets/icons/launcher.png
+  image_path: assets/branding/app_icon.png
   remove_alpha_ios: true
   adaptive_icon_background: "#FFF3E0"
-  adaptive_icon_foreground: assets/icons/launcher_foreground.png
-  adaptive_icon_foreground_inset: 0
+  adaptive_icon_foreground: assets/branding/app_icon_foreground.png
+  min_sdk_android: 21
   web:
     generate: true
-    image_path: assets/icons/launcher.png
+    image_path: assets/branding/app_icon.png
     background_color: "#FFF3E0"
     theme_color: "#B35300"
   windows:
     generate: true
-    image_path: assets/icons/launcher.png
+    image_path: assets/branding/app_icon.png
     icon_size: 256
   macos:
     generate: true
-    image_path: assets/icons/launcher.png
+    image_path: assets/branding/app_icon.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -121,3 +121,7 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Launcher icons from the UMP Smart Dine mark. Regenerate with:
+#   python tool/make_icons.py
+#   dart run flutter_launcher_icons

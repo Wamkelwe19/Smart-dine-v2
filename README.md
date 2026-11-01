@@ -86,8 +86,8 @@ flutter test
 ```
 
 Launcher icons for Android, iOS, web, Windows, and macOS are generated from
-`assets/icons/launcher.png`. After replacing the artwork, run
-`dart run flutter_launcher_icons` to regenerate the platform icons.
+`assets/branding/app_icon.png`. After replacing the artwork, run
+`python tool/make_icons.py` followed by `dart run flutter_launcher_icons`.
 
 ---
 

@@ -41,6 +41,12 @@ $$;
 
 -- ----------------------------------------------------------------- orders --
 
+-- The live orders_touch_updated_at trigger writes updated_at, which this
+-- table does not have yet, so any UPDATE below would fail with
+-- 'record "new" has no field "updated_at"'. Off until the column exists; it
+-- is re-created further down.
+drop trigger if exists orders_touch_updated_at on public.orders;
+
 -- The old check allows 'pending' and 'completed', which are not order states.
 alter table public.orders drop constraint if exists orders_status_check;
 

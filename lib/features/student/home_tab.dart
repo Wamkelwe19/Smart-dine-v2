@@ -7,11 +7,11 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/catalog_repository.dart';
-import '../../data/repositories/notification_repository.dart';
 import '../../widgets/app_widgets.dart';
 import '../../widgets/cafeteria_image.dart';
 import '../../widgets/item_options_sheet.dart';
 import '../../widgets/special_card.dart';
+import '../shared/notification_center.dart';
 import '../shared/notification_sheet.dart';
 import 'cart_controller.dart';
 import 'hall_menu_screen.dart';
@@ -30,11 +30,15 @@ class HomeTab extends StatefulWidget {
     required this.profile,
     required this.cart,
     required this.onViewCart,
+    required this.notifications,
+    required this.onViewOrders,
   });
 
   final Profile profile;
   final CartController cart;
   final VoidCallback onViewCart;
+  final NotificationCenter notifications;
+  final VoidCallback onViewOrders;
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -42,7 +46,6 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   final CatalogRepository _catalog = CatalogRepository();
-  final NotificationRepository _notifications = NotificationRepository();
 
   late Stream<List<Cafeteria>> _cafeterias = _catalog.watchCafeterias();
   StreamSubscription<List<MenuSpecial>>? _specialsSubscription;
@@ -53,18 +56,9 @@ class _HomeTabState extends State<HomeTab> {
   /// Live specials joined to their item, for the carousel.
   List<MenuSpecial> _liveSpecials = const [];
 
-  DateTime? _lastSeen;
-  Set<String> _dismissedNotificationIds = const {};
-
   @override
   void initState() {
     super.initState();
-    _notifications.lastSeen().then((value) {
-      if (mounted) setState(() => _lastSeen = value);
-    });
-    _notifications.dismissedIds(widget.profile.id).then((value) {
-      if (mounted) setState(() => _dismissedNotificationIds = value);
-    });
     _listenToSpecials();
   }
 
@@ -108,19 +102,6 @@ class _HomeTabState extends State<HomeTab> {
   Future<void> _addToCart(MenuItem item) =>
       addItemToCart(context, cart: widget.cart, item: item);
 
-  Future<void> _dismissNotification(String id) async {
-    await _notifications.dismiss(
-      userId: widget.profile.id,
-      notificationId: id,
-    );
-    if (mounted) {
-      setState(() => _dismissedNotificationIds = {
-            ..._dismissedNotificationIds,
-            id,
-          });
-    }
-  }
-
   void _openHall(Cafeteria cafeteria) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -151,14 +132,15 @@ class _HomeTabState extends State<HomeTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Hi, ${widget.profile.displayName}',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Hi, ${widget.profile.displayName}',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             Text(
               'What are you eating today?',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AppColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -174,13 +156,9 @@ class _HomeTabState extends State<HomeTab> {
               ),
             ),
           ),
-          _NotificationBell(
-            repository: _notifications,
-            role: UserRole.student,
-            lastSeen: _lastSeen,
-            dismissedIds: _dismissedNotificationIds,
-            onDismiss: _dismissNotification,
-            onOpened: (seenAt) => setState(() => _lastSeen = seenAt),
+          NotificationBell(
+            center: widget.notifications,
+            onOpenOrders: widget.onViewOrders,
           ),
           const SizedBox(width: AppSpacing.sm),
         ],
@@ -206,7 +184,8 @@ class _HomeTabState extends State<HomeTab> {
           }
 
           // Open halls first, then by name, so what can serve you now leads.
-          final ordered = [...cafeterias]..sort((a, b) {
+          final ordered = [...cafeterias]
+            ..sort((a, b) {
               if (a.isOpen != b.isOpen) return a.isOpen ? -1 : 1;
               return a.name.compareTo(b.name);
             });
@@ -243,8 +222,9 @@ class _HomeTabState extends State<HomeTab> {
                     title: 'Dining halls',
                     trailing: Text(
                       '${cafeterias.where((c) => c.isOpen).length} open now',
-                      style: Theme.of(context).textTheme.labelMedium
-                          ?.copyWith(color: AppColors.textSecondary),
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ),
@@ -261,7 +241,9 @@ class _HomeTabState extends State<HomeTab> {
                       return SliverGrid.builder(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           // One wide card per row on a phone; more on tablets.
-                          crossAxisCount: width < 600 ? 1 : (width < 900 ? 2 : 3),
+                          crossAxisCount: width < 600
+                              ? 1
+                              : (width < 900 ? 2 : 3),
                           mainAxisSpacing: AppSpacing.lg,
                           crossAxisSpacing: AppSpacing.lg,
                           childAspectRatio: 16 / 10,
@@ -365,24 +347,24 @@ class _PageDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ExcludeSemantics(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var i = 0; i < count; i++)
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOut,
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                height: 6,
-                width: i == index ? 20 : 6,
-                decoration: BoxDecoration(
-                  color: i == index ? AppColors.primary : AppColors.outline,
-                  borderRadius: AppRadius.pillRadius,
-                ),
-              ),
-          ],
-        ),
-      );
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < count; i++)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            height: 6,
+            width: i == index ? 20 : 6,
+            decoration: BoxDecoration(
+              color: i == index ? AppColors.primary : AppColors.outline,
+              borderRadius: AppRadius.pillRadius,
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 // ---------------------------------------------------------- dining halls --
@@ -406,7 +388,8 @@ class _DiningHallCard extends StatelessWidget {
 
     return Semantics(
       button: true,
-      label: '${cafeteria.name}, ${cafeteria.statusLabel}'
+      label:
+          '${cafeteria.name}, ${cafeteria.statusLabel}'
           '${specialCount > 0 ? ', $specialCount on special' : ''}',
       excludeSemantics: true,
       child: Card(
@@ -489,8 +472,11 @@ class _DiningHallCard extends StatelessWidget {
                         color: Colors.white,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.arrow_forward,
-                          size: 20, color: AppColors.primary),
+                      child: const Icon(
+                        Icons.arrow_forward,
+                        size: 20,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ],
                 ),
@@ -517,97 +503,49 @@ class _SpecialsChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md, vertical: AppSpacing.xs),
-        decoration: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: AppRadius.pillRadius,
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.xs,
+    ),
+    decoration: BoxDecoration(
+      color: AppColors.primary,
+      borderRadius: AppRadius.pillRadius,
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.local_offer_outlined, size: 14, color: Colors.white),
+        const SizedBox(width: AppSpacing.xs),
+        Text(
+          '$count on special',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.local_offer_outlined, size: 14, color: Colors.white),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              '$count on special',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ],
-        ),
-      );
+      ],
+    ),
+  );
 }
 
 // ---------------------------------------------------------------- shared --
-
-class _NotificationBell extends StatelessWidget {
-  const _NotificationBell({
-    required this.repository,
-    required this.role,
-    required this.lastSeen,
-    required this.dismissedIds,
-    required this.onDismiss,
-    required this.onOpened,
-  });
-
-  final NotificationRepository repository;
-  final UserRole role;
-  final DateTime? lastSeen;
-  final Set<String> dismissedIds;
-  final Future<void> Function(String id) onDismiss;
-  final ValueChanged<DateTime> onOpened;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<List<AppNotification>>(
-      stream: repository.watch(role),
-      builder: (context, snapshot) {
-        final notices = (snapshot.data ?? const <AppNotification>[])
-            .where((notice) => !dismissedIds.contains(notice.id))
-            .toList();
-        final unread = NotificationRepository.hasUnread(notices, lastSeen);
-
-        return IconButton(
-          tooltip: unread ? 'Notices, unread' : 'Notices',
-          onPressed: () async {
-            final seenAt = await repository.markSeen();
-            onOpened(seenAt);
-            if (!context.mounted) return;
-            await showNotificationSheet(
-              context,
-              notices,
-              dismissedIds: dismissedIds,
-              onDismiss: onDismiss,
-            );
-          },
-          icon: Badge(
-            isLabelVisible: unread,
-            child: const Icon(Icons.notifications_outlined),
-          ),
-        );
-      },
-    );
-  }
-}
 
 class _HomeSkeleton extends StatelessWidget {
   const _HomeSkeleton();
 
   @override
   Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.all(AppSpacing.gutter),
-        children: const [
-          AppSkeleton(height: 24, width: 160, radius: AppRadius.xs),
-          SizedBox(height: AppSpacing.md),
-          AppSkeleton(height: 260, radius: AppRadius.md),
-          SizedBox(height: AppSpacing.xl),
-          AppSkeleton(height: 24, width: 140, radius: AppRadius.xs),
-          SizedBox(height: AppSpacing.md),
-          AppSkeleton(height: 200, radius: AppRadius.md),
-          SizedBox(height: AppSpacing.lg),
-          AppSkeleton(height: 200, radius: AppRadius.md),
-        ],
-      );
+    padding: const EdgeInsets.all(AppSpacing.gutter),
+    children: const [
+      AppSkeleton(height: 24, width: 160, radius: AppRadius.xs),
+      SizedBox(height: AppSpacing.md),
+      AppSkeleton(height: 260, radius: AppRadius.md),
+      SizedBox(height: AppSpacing.xl),
+      AppSkeleton(height: 24, width: 140, radius: AppRadius.xs),
+      SizedBox(height: AppSpacing.md),
+      AppSkeleton(height: 200, radius: AppRadius.md),
+      SizedBox(height: AppSpacing.lg),
+      AppSkeleton(height: 200, radius: AppRadius.md),
+    ],
+  );
 }

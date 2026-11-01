@@ -1,3 +1,8 @@
 {
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "interactive",
+    // This is a Flutter app: Flutter builds the Android side itself. The Java
+    // extension importing android/ as an Eclipse/Gradle project only produces
+    // false errors ("Cannot add nature ... .project is out of sync").
+    "java.import.gradle.enabled": false,
+    "java.import.maven.enabled": false
 }

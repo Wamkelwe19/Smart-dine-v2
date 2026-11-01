@@ -37,10 +37,10 @@ supabase db push
 | `0005_auth_hardening.sql` | Closes the login enumeration oracle (REQ-111, REQ-30); profile creation trigger. |
 | `0006_rls.sql` | Row level security on every table (REQ-110, REQ-76). |
 | `0007_storage_policies.sql` | Locks the `menu-images` bucket to bound staff (REQ-113). |
-| `0008_specials_and_cafeteria_images.sql` | Specials and cafeteria images. |
-| `0009_varieties_combos_categories.sql` | Item variants, combos and menu categories. |
-| `0010_repair_orders.sql` | Repairs order schema and policies. |
-| `0011_user_notifications.sql` | Per-user order notifications. |
+| `0008_specials_and_cafeteria_images.sql` | Specials and discounts charged at checkout; hall cover photos. |
+| `0009_varieties_combos_categories.sql` | Flavours/sizes with their own stock, combos built from items, category tabs. |
+| `0010_repair_orders.sql` | Repairs the hosted project's older `orders` / `order_items` tables; removes the old insecure `place_order`. |
+| `0011_user_notifications.sql` | Order-status notifications per user; Google profile details; `ensure_profile()`. |
 | `0012_yoco_payment_provider.sql` | Sets Yoco as the default provider for new card-payment rows. |
 
 ### Two manual steps after migrating

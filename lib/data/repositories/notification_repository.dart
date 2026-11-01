@@ -14,7 +14,6 @@ class NotificationRepository {
   SupabaseClient get _client => _injected ?? Supabase.instance.client;
 
   static const _lastSeenKey = 'last_seen_notification_timestamp';
-  static const _dismissedKeyPrefix = 'dismissed_notifications_';
 
   /// REQ-85 / REQ-86 / REQ-9: notices for this audience, newest first,
   /// capped at fifty.
@@ -60,35 +59,5 @@ class NotificationRepository {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastSeenKey, now.toIso8601String());
     return now;
-  }
-
-  Future<Set<String>> dismissedIds(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    return (prefs.getStringList('$_dismissedKeyPrefix$userId') ?? const [])
-        .toSet();
-  }
-
-  Future<void> dismiss({
-    required String userId,
-    required String notificationId,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = '$_dismissedKeyPrefix$userId';
-    final ids = prefs.getStringList(key) ?? <String>[];
-    if (ids.contains(notificationId)) return;
-    ids.add(notificationId);
-    if (!await prefs.setStringList(key, ids)) {
-      throw StateError('Could not save the dismissed notification.');
-    }
-  }
-
-  /// REQ-87.
-  static bool hasUnread(List<AppNotification> notices, DateTime? lastSeen) {
-    if (notices.isEmpty) return false;
-    if (lastSeen == null) return true;
-    return notices.any(
-      (notice) =>
-          notice.createdAt != null && notice.createdAt!.isAfter(lastSeen),
-    );
   }
 }

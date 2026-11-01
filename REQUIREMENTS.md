@@ -68,7 +68,7 @@ inserted, so a real 16-digit card could not be typed, and the CVV field was hard
 | REQ-113 | Storage writes restricted to bound staff | 0007 |
 | REQ-115 | No personal data in release logs | `kDebugMode` guard in `app_error.dart` |
 | REQ-123 | Lints clean, no file over 800 lines | 0 issues; largest file 422 lines (was 2,123) |
-| REQ-124 | Tests for cart, reservation and validation logic | 60 tests in `test/` |
+| REQ-124 | Tests for cart, reservation and validation logic | Automated tests in `test/` |
 | REQ-125 | Contrast, 48dp targets, screen-reader labels | `core/theme/`, `QuantityStepper`, `Semantics` |
 
 Also closed from the TBD list: **TBD-02** (order persistence), **TBD-03** (RLS),

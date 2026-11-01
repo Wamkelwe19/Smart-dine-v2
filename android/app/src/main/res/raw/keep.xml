@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- These drawables are referenced by name from Dart (LocalNotifier), which
+     resource shrinking cannot see; without this a release build strips them
+     and every notification fails. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_notify,@drawable/notification_large_icon" />
