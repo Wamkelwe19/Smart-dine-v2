@@ -318,7 +318,7 @@ release build until the release SHA-1 is registered in Google Cloud.
 | "You do not have permission to do that" | RLS working as intended | Check the staff binding, or that you are signed in as the right role |
 | Stock never comes back after abandoning a cart | pg_cron not scheduled | Step 2c |
 | Card checkout does not open | Check the Edge Function deployment and `YOCO_SECRET_KEY` | Step 4 |
-| Google button missing | `GOOGLE_WEB_CLIENT_ID` empty | Step 5c |
+git config --global user.name "Your GitHub Name"| Google button missing | `GOOGLE_WEB_CLIENT_ID` empty | Step 5c |
 | Google sign-in opens the browser then hangs | Redirect URL not registered | Step 5b |
 | Payment succeeds but the order stays unpaid | Webhook not registered or its signing secret is missing | Step 4d |
 | Release APK cannot reach the network | Manifest missing `INTERNET` | Already fixed; rebuild |
