@@ -35,13 +35,25 @@ class _ProfileTabState extends State<ProfileTab> {
           'Anything still in your cart will be released back to the menu.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Stay'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Sign out'),
+          SizedBox(
+            width: double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                  ),
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Stay'),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Sign out'),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -82,22 +94,28 @@ class _ProfileTabState extends State<ProfileTab> {
               children: [
                 CircleAvatar(
                   radius: 44,
-                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  backgroundColor: theme.colorScheme.primary.withValues(
+                    alpha: 0.12,
+                  ),
                   child: Text(
                     _initials(profile),
-                    style: theme.textTheme.headlineMedium
-                        ?.copyWith(color: theme.colorScheme.primary),
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  profile.fullName.isEmpty ? profile.displayName : profile.fullName,
+                  profile.fullName.isEmpty
+                      ? profile.displayName
+                      : profile.fullName,
                   style: theme.textTheme.titleLarge,
                 ),
                 Text(
                   profile.role.label,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: AppColors.textSecondary),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -127,8 +145,9 @@ class _ProfileTabState extends State<ProfileTab> {
             'We store your name, student or staff number, phone number and '
             'email address, and use them only to run this app. They are not '
             'shared with anyone beyond the hosting platform.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: AppColors.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           // REQ-114: a route to deletion. Doing it in-app would need an
@@ -149,7 +168,9 @@ class _ProfileTabState extends State<ProfileTab> {
                     height: 18,
                     width: 18,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Icon(Icons.logout),
             label: const Text('Sign out'),
@@ -211,8 +232,9 @@ class _DetailTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(AppSpacing.sm),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest
-                  .withValues(alpha: 0.6),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.6,
+              ),
               borderRadius: BorderRadius.circular(AppRadius.xs),
             ),
             child: Icon(icon, size: 20, color: AppColors.textSecondary),
@@ -224,8 +246,9 @@ class _DetailTile extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: AppColors.textSecondary),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 Text(value, style: theme.textTheme.bodyLarge),
               ],

@@ -40,6 +40,7 @@ class _StaffShellState extends State<StaffShell> {
   Cafeteria? _selected;
   Object? _error;
   DateTime? _lastSeen;
+  Set<String> _dismissedNotificationIds = const {};
 
   @override
   void initState() {
@@ -48,6 +49,22 @@ class _StaffShellState extends State<StaffShell> {
     _notifications.lastSeen().then((value) {
       if (mounted) setState(() => _lastSeen = value);
     });
+    _notifications.dismissedIds(widget.profile.id).then((value) {
+      if (mounted) setState(() => _dismissedNotificationIds = value);
+    });
+  }
+
+  Future<void> _dismissNotification(String id) async {
+    await _notifications.dismiss(
+      userId: widget.profile.id,
+      notificationId: id,
+    );
+    if (mounted) {
+      setState(() => _dismissedNotificationIds = {
+            ..._dismissedNotificationIds,
+            id,
+          });
+    }
   }
 
   Future<void> _load() async {
@@ -177,7 +194,12 @@ class _StaffShellState extends State<StaffShell> {
   Widget _bell() => StreamBuilder<List<AppNotification>>(
         stream: _notifications.watch(UserRole.staff),
         builder: (context, snapshot) {
-          final notices = snapshot.data ?? const <AppNotification>[];
+          final notices = (snapshot.data ?? const <AppNotification>[])
+              .where(
+                (notice) =>
+                    !_dismissedNotificationIds.contains(notice.id),
+              )
+              .toList();
           final unread = NotificationRepository.hasUnread(notices, _lastSeen);
 
           return IconButton(
@@ -187,7 +209,12 @@ class _StaffShellState extends State<StaffShell> {
               if (!mounted) return;
               setState(() => _lastSeen = seenAt);
               if (!context.mounted) return;
-              await showNotificationSheet(context, notices);
+              await showNotificationSheet(
+                context,
+                notices,
+                dismissedIds: _dismissedNotificationIds,
+                onDismiss: _dismissNotification,
+              );
             },
             icon: Badge(
               isLabelVisible: unread,

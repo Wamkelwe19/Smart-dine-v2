@@ -154,6 +154,7 @@ class OrderRepository {
         .from('payments')
         .select('provider_reference')
         .eq('order_id', orderId)
+        .eq('provider', 'yoco')
         .order('created_at', ascending: false)
         .limit(1)
         .maybeSingle();

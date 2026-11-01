@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/config/app_config.dart';
 import '../../core/error/app_error.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
@@ -18,7 +17,7 @@ import 'order_confirmation_screen.dart';
 /// text fields — which puts the project in PCI-DSS scope — and was broken
 /// regardless: the 16-character limit counted the dashes its own formatter
 /// inserted, so a real 16-digit card could not be entered, and the CVV field
-/// was hard-limited to three digits. Paystack's hosted page collects the card
+/// was hard-limited to three digits. Yoco's hosted page collects the card
 /// instead, so the app never touches it (REQ-58).
 class CartTab extends StatefulWidget {
   const CartTab({
@@ -41,6 +40,7 @@ class _CartTabState extends State<CartTab> {
 
   PaymentMethod _method = PaymentMethod.cash;
   bool _checkingOut = false;
+  final Set<String> _dismissedLineKeys = {};
 
   Future<void> _checkout() async {
     setState(() => _checkingOut = true);
@@ -78,7 +78,11 @@ class _CartTabState extends State<CartTab> {
     PaymentOutcome? outcome;
     String? paymentNote;
     try {
-      outcome = await payOrderByCard(context, orderId: order.id, payments: _payments);
+      outcome = await payOrderByCard(
+        context,
+        orderId: order.id,
+        payments: _payments,
+      );
     } catch (error) {
       paymentNote = AppError.from(error).message;
     }
@@ -161,21 +165,41 @@ class _CartTabState extends State<CartTab> {
     );
   }
 
-  Widget _lines(CartController cart) => ListView.separated(
-        padding: const EdgeInsets.all(AppSpacing.gutter),
-        itemCount: cart.lines.length,
-        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-        itemBuilder: (context, index) {
-          final line = cart.lines[index];
-          return _CartLineCard(
-            line: line,
-            busy: cart.isLineBusy(line),
-            onIncrease: () => _guard(() => cart.increase(line)),
-            onDecrease: () => _guard(() => cart.decrease(line)),
-            onRemove: () => _guard(() => cart.remove(line)),
-          );
-        },
-      );
+  Widget _lines(CartController cart) {
+    final lines = cart.lines
+        .where((line) => !_dismissedLineKeys.contains(line.key))
+        .toList();
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(AppSpacing.gutter),
+      itemCount: lines.length,
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+      itemBuilder: (context, index) {
+        final line = lines[index];
+        return _CartLineCard(
+          line: line,
+          busy: cart.isLineBusy(line),
+          canDismiss: cart.busyItemId == null,
+          onIncrease: () => _guard(() => cart.increase(line)),
+          onDecrease: () => _guard(() => cart.decrease(line)),
+          onRemove: () => _dismissAndRemove(line),
+        );
+      },
+    );
+  }
+
+  Future<void> _dismissAndRemove(CartLine line) async {
+    setState(() => _dismissedLineKeys.add(line.key));
+
+    try {
+      await widget.cart.remove(line);
+    } catch (error) {
+      if (!mounted) return;
+      context.showAppError(error);
+    } finally {
+      if (mounted) setState(() => _dismissedLineKeys.remove(line.key));
+    }
+  }
 
   Future<void> _guard(Future<void> Function() action) async {
     try {
@@ -222,15 +246,19 @@ class _CartTabState extends State<CartTab> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline,
-                      size: 20, color: AppColors.onWarningContainer),
+                  const Icon(
+                    Icons.info_outline,
+                    size: 20,
+                    color: AppColors.onWarningContainer,
+                  ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
                       'Your cart has items from more than one cafeteria. '
                       'Remove some so one order goes to one outlet.',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: AppColors.onWarningContainer),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.onWarningContainer,
+                      ),
                     ),
                   ),
                 ],
@@ -253,7 +281,6 @@ class _CartTabState extends State<CartTab> {
                 value: PaymentMethod.card,
                 label: const Text('Card'),
                 icon: const Icon(Icons.credit_card),
-                enabled: AppConfig.isCardPaymentConfigured,
               ),
             ],
             selected: {_method},
@@ -261,17 +288,6 @@ class _CartTabState extends State<CartTab> {
                 ? null
                 : (selection) => setState(() => _method = selection.first),
           ),
-          if (!AppConfig.isCardPaymentConfigured)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Text(
-                'Card payment is not configured for this build. '
-                'Cash on collection is available.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: AppColors.textSecondary),
-              ),
-            ),
-
           const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
@@ -281,8 +297,9 @@ class _CartTabState extends State<CartTab> {
               // REQ-54: the sum of each line, in rand, two decimal places.
               Text(
                 Money.format(cart.totalCents),
-                style: theme.textTheme.headlineSmall
-                    ?.copyWith(color: theme.colorScheme.primary),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
               ),
             ],
           ),
@@ -295,11 +312,15 @@ class _CartTabState extends State<CartTab> {
                     height: 22,
                     width: 22,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2.5, color: Colors.white),
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
                   )
-                : Text(_method == PaymentMethod.cash
-                    ? 'Place order · pay at counter'
-                    : 'Pay ${Money.format(cart.totalCents)}'),
+                : Text(
+                    _method == PaymentMethod.cash
+                        ? 'Place order · pay at counter'
+                        : 'Pay ${Money.format(cart.totalCents)}',
+                  ),
           ),
         ],
       ),
@@ -311,6 +332,7 @@ class _CartLineCard extends StatelessWidget {
   const _CartLineCard({
     required this.line,
     required this.busy,
+    required this.canDismiss,
     required this.onIncrease,
     required this.onDecrease,
     required this.onRemove,
@@ -318,6 +340,7 @@ class _CartLineCard extends StatelessWidget {
 
   final CartLine line;
   final bool busy;
+  final bool canDismiss;
   final VoidCallback onIncrease;
   final VoidCallback onDecrease;
   final VoidCallback onRemove;
@@ -327,8 +350,10 @@ class _CartLineCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Dismissible(
-      key: ValueKey(line.item.id),
-      direction: DismissDirection.endToStart,
+      key: ValueKey(line.key),
+      direction: canDismiss
+          ? DismissDirection.endToStart
+          : DismissDirection.none,
       onDismissed: (_) => onRemove(),
       background: Container(
         alignment: Alignment.centerRight,
@@ -357,16 +382,20 @@ class _CartLineCard extends StatelessWidget {
                   child: line.item.imageUrl == null
                       ? Container(
                           color: AppColors.brandPale,
-                          child: const Icon(Icons.restaurant_menu,
-                              color: AppColors.primary),
+                          child: const Icon(
+                            Icons.restaurant_menu,
+                            color: AppColors.primary,
+                          ),
                         )
                       : Image.network(
                           line.item.imageUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, _, _) => Container(
                             color: AppColors.brandPale,
-                            child: const Icon(Icons.restaurant_menu,
-                                color: AppColors.primary),
+                            child: const Icon(
+                              Icons.restaurant_menu,
+                              color: AppColors.primary,
+                            ),
                           ),
                         ),
                 ),
@@ -388,8 +417,9 @@ class _CartLineCard extends StatelessWidget {
                         line.details!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: AppColors.textPrimary),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     const SizedBox(height: AppSpacing.xxs),
                     Text.rich(
@@ -401,7 +431,8 @@ class _CartLineCard extends StatelessWidget {
                             TextSpan(
                               text: Money.format(line.regularUnitPriceCents),
                               style: const TextStyle(
-                                  decoration: TextDecoration.lineThrough),
+                                decoration: TextDecoration.lineThrough,
+                              ),
                             ),
                             TextSpan(
                               text: '  ${line.item.special!.badgeLabel}',
@@ -413,14 +444,16 @@ class _CartLineCard extends StatelessWidget {
                           ],
                         ],
                       ),
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: AppColors.textSecondary),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
                       line.lineTotalLabel,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(color: theme.colorScheme.primary),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
                   ],
                 ),

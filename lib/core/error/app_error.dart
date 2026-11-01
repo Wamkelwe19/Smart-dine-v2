@@ -113,7 +113,7 @@ class AppError implements Exception {
     'PGRST202', 'PGRST200', 'PGRST204', '42883', '42P01', '42703',
   };
 
-  /// Edge Function failures (the Paystack functions). The body carries an
+  /// Edge Function failures (the Yoco functions). The body carries an
   /// `error` code; the status says what kind of failure it was.
   static AppError _fromFunction(FunctionException error) {
     final details = error.details;
@@ -121,10 +121,10 @@ class AppError implements Exception {
     final detail = 'FunctionException(${error.status}, $code, ${error.details})';
 
     final message = switch (code) {
-      'PAYSTACK_NOT_CONFIGURED' =>
+      'YOCO_NOT_CONFIGURED' =>
         'Card payment isn\'t available yet. Please pay with cash at the counter.',
-      'PAYSTACK_INIT_FAILED' =>
-        'Paystack could not start the payment. Please try again, or pay with cash.',
+      'YOCO_INIT_FAILED' =>
+        'Yoco could not start the payment. Please try again, or pay with cash.',
       'ALREADY_PAID' => 'This order has already been paid.',
       'ORDER_CANCELLED' => 'This order was cancelled, so there is nothing to pay.',
       'NOTHING_TO_PAY' => 'This order has nothing to pay.',

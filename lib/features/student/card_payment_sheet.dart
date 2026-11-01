@@ -7,7 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../data/repositories/payment_repository.dart';
 
-/// Pays one order by card: start a Paystack transaction, open its hosted page,
+/// Pays one order by card: start a Yoco checkout, open its hosted page,
 /// wait for the student to come back, then ask our server what happened.
 ///
 /// Throws (an [AppError]-mappable error) only when the payment could not be
@@ -41,7 +41,7 @@ Future<PaymentOutcome> payOrderByCard(
   return outcome ?? PaymentOutcome.pending;
 }
 
-/// Shown while the student is on Paystack. Verifies when they return — the
+/// Shown while the student is on Yoco. Verifies when they return — the
 /// app coming back to the foreground, or the payment-callback link arriving,
 /// whichever is first — or when they tap "I've paid".
 class CardPaymentSheet extends StatefulWidget {
@@ -111,20 +111,20 @@ class _CardPaymentSheetState extends State<CardPaymentSheet> {
           Icons.credit_card,
           AppColors.primary,
           'Complete your payment',
-          'Paystack has opened in your browser. Pay there, then come back to '
+          'Yoco has opened in your browser. Pay there, then come back to '
               'UMP Smart Dine — we will confirm it automatically.',
         ),
       _Phase.checking => (
           Icons.sync,
           AppColors.secondary,
           'Confirming your payment…',
-          'Checking with Paystack. This takes a few seconds.',
+          'Checking with Yoco. This takes a few seconds.',
         ),
       _Phase.notYet => (
           Icons.hourglass_top,
           AppColors.warning,
           'Not confirmed yet',
-          'Paystack has not confirmed a payment for this order. If you paid, '
+          'Yoco has not confirmed a payment for this order. If you paid, '
               'check again in a moment — it also updates on its own. Otherwise '
               'reopen the payment page, or pay at the counter.',
         ),

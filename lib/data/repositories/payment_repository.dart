@@ -5,30 +5,31 @@ import '../../core/error/app_error.dart';
 
 /// Result of a payment attempt, as our server sees it.
 enum PaymentOutcome {
-  /// Paystack confirmed the charge (and the amount matched).
+  /// Yoco confirmed the charge (and the amount matched).
   paid,
 
-  /// Paystack reported a final failure (declined, reversed, wrong amount).
+  /// Yoco reported a final failure (declined or amount mismatch).
   failed,
 
-  /// The student has not finished on Paystack yet, or Paystack has not
-  /// confirmed. Not a failure: the webhook may still mark it paid.
+  /// The student has not finished on Yoco yet, or Yoco has not confirmed.
+  /// Not a failure: the webhook may still mark it paid.
   pending,
 
   /// We could not reach a verdict (unknown reference, service unreachable).
   abandoned;
 
   bool get isPaid => this == PaymentOutcome.paid;
-  bool get isFinal => this == PaymentOutcome.paid || this == PaymentOutcome.failed;
+  bool get isFinal =>
+      this == PaymentOutcome.paid || this == PaymentOutcome.failed;
 }
 
-/// Paystack, through the Edge Functions in `supabase/functions/`.
+/// Yoco, through the Edge Functions in `supabase/functions/`.
 ///
 /// The app never sees a card number. The old checkout collected the PAN, expiry
 /// and CVV into Flutter `TextFormField`s, which puts the project inside PCI-DSS
 /// scope for no benefit — and was broken anyway, because the 16-character limit
 /// counted the dashes the formatter inserted, so a real 16-digit card could not
-/// be typed. Paystack's hosted page collects the card instead, which satisfies
+/// be typed. Yoco's hosted page collects the card instead, which satisfies
 /// REQ-58 far better than a validated-but-inert form did.
 class PaymentRepository {
   PaymentRepository({SupabaseClient? client}) : _injected = client;
@@ -45,7 +46,7 @@ class PaymentRepository {
     String orderId,
   ) async {
     final response = await _client.functions.invoke(
-      'paystack-initialize',
+      'yoco-initialize',
       body: {'order_id': orderId},
     );
 
@@ -63,13 +64,13 @@ class PaymentRepository {
     );
   }
 
-  /// The "come back and verify" step. Asks our server, which asks Paystack
-  /// server-to-server and re-checks the amount before marking anything paid.
+  /// The "come back and verify" step. Asks our server for the result of the
+  /// signed Yoco webhook, after it has re-checked the amount.
   ///
   /// Idempotent with the webhook: whichever arrives first wins.
   Future<PaymentOutcome> verify(String reference) async {
     final response = await _client.functions.invoke(
-      'paystack-verify',
+      'yoco-verify',
       body: {'reference': reference},
     );
 
@@ -97,10 +98,10 @@ class PaymentRepository {
     }
   }
 
-  /// Polls verification after the student has come back from Paystack.
+  /// Polls the Yoco webhook result after the student has returned to the app.
   ///
-  /// Paystack can take a few seconds to settle a charge, and the webhook may
-  /// land first, so this retries until a final answer (paid / failed) or the
+  /// Yoco can take a few seconds to deliver its webhook, so this retries until
+  /// a final answer (paid / failed) or the
   /// attempts run out, in which case the result is `pending`.
   Future<PaymentOutcome> verifyWithRetry(
     String reference, {
@@ -119,6 +120,8 @@ class PaymentRepository {
       if (i < attempts - 1) await Future<void>.delayed(gap);
     }
 
-    return outcome == PaymentOutcome.abandoned ? PaymentOutcome.pending : outcome;
+    return outcome == PaymentOutcome.abandoned
+        ? PaymentOutcome.pending
+        : outcome;
   }
 }

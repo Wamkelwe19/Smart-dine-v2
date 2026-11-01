@@ -6,7 +6,7 @@ dashboard. This closes **TBD-10** in the SRS.
 ```
 supabase/
   migrations/     ordered SQL — apply 0001 first, then in sequence
-  functions/      Deno Edge Functions for the Paystack payment flow
+  functions/      Deno Edge Functions for the Yoco Checkout API payment flow
 ```
 
 ## Applying the migrations
@@ -16,7 +16,7 @@ existing project: they create what is missing and leave existing data alone.
 
 **Option A — Supabase dashboard (no tooling needed)**
 
-Open the SQL editor and paste each file in order, 0001 through 0007, running
+Open the SQL editor and paste each file in order, 0001 through 0012, running
 each one before moving to the next.
 
 **Option B — Supabase CLI**
@@ -37,6 +37,11 @@ supabase db push
 | `0005_auth_hardening.sql` | Closes the login enumeration oracle (REQ-111, REQ-30); profile creation trigger. |
 | `0006_rls.sql` | Row level security on every table (REQ-110, REQ-76). |
 | `0007_storage_policies.sql` | Locks the `menu-images` bucket to bound staff (REQ-113). |
+| `0008_specials_and_cafeteria_images.sql` | Specials and cafeteria images. |
+| `0009_varieties_combos_categories.sql` | Item variants, combos and menu categories. |
+| `0010_repair_orders.sql` | Repairs order schema and policies. |
+| `0011_user_notifications.sql` | Per-user order notifications. |
+| `0012_yoco_payment_provider.sql` | Sets Yoco as the default provider for new card-payment rows. |
 
 ### Two manual steps after migrating
 
@@ -70,24 +75,26 @@ select p.id, c.id
 ## Edge Functions
 
 ```bash
-supabase functions deploy paystack-initialize
-supabase functions deploy paystack-verify
-supabase functions deploy paystack-webhook --no-verify-jwt
+supabase functions deploy yoco-initialize
+supabase functions deploy yoco-verify
+supabase functions deploy yoco-webhook --no-verify-jwt
+supabase functions deploy yoco-return --no-verify-jwt
 ```
 
-`--no-verify-jwt` on the webhook only: Paystack calls it, not a signed-in user,
-so it authenticates by HMAC signature instead of a JWT.
+Only the webhook and return functions are public. The webhook validates Yoco's
+HMAC signature and timestamp; the return function only redirects to the app.
 
 ### Secrets
 
 ```bash
-supabase secrets set PAYSTACK_SECRET_KEY=sk_test_xxxxxxxx
+supabase secrets set YOCO_SECRET_KEY=sk_test_xxxxxxxx
+supabase secrets set YOCO_WEBHOOK_SECRET=whsec_xxxxxxxx
 ```
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected
 by the platform — do not set them yourself.
 
-**The Paystack secret key and the Supabase service-role key must never appear in
+**The Yoco secret key, webhook signing secret, and Supabase service-role key must never appear in
 the Flutter app, in `env.json`, or in this repository.** They exist only as Edge
 Function secrets. The service-role key bypasses RLS entirely, which is precisely
 why `orders` and `payments` have no client-facing write policy: the only way to
@@ -95,28 +102,34 @@ mark an order paid is through a function holding that key.
 
 ### Register the webhook
 
-Paystack dashboard → Settings → API Keys & Webhooks → Webhook URL:
+Register a Checkout API webhook using the test secret key:
 
 ```
-https://sotsfjzdbnmrfcdifwmi.supabase.co/functions/v1/paystack-webhook
+POST https://payments.yoco.com/api/webhooks
+Authorization: Bearer sk_test_...
+Content-Type: application/json
+
+{"name":"UMP Smart Dine","url":"https://sotsfjzdbnmrfcdifwmi.supabase.co/functions/v1/yoco-webhook"}
 ```
+
+Store the returned `secret` in Supabase as `YOCO_WEBHOOK_SECRET`. Yoco returns
+this value only once.
 
 ## Payment flow
 
 ```
-app ──▶ paystack-initialize ──▶ Paystack /transaction/initialize
-                                      │  amount read from the DB, not the client
-        ◀── authorization_url ────────┘
-app opens checkout ──▶ student pays ──▶ redirect to za.ac.ump.smartdine://payment-callback
-                                   └──▶ Paystack ──▶ paystack-webhook (signed)
-app ──▶ paystack-verify ──▶ Paystack /transaction/verify/:ref
-                                 │  status AND amount re-checked
-                                 ▼
-                     orders.payment_state = 'paid'
+app ──▶ yoco-initialize ──▶ Yoco POST /api/checkouts
+                                  │ amount read from the owned order
+        ◀── redirectUrl ─────────┘
+app opens hosted checkout ──▶ student pays
+                               ├──▶ yoco-return redirects to the app
+                               └──▶ Yoco ──▶ yoco-webhook (signed)
+app ──▶ yoco-verify ──▶ checks persisted webhook result
+                             │ signature, amount and currency re-checked
+                             ▼
+                 orders.payment_state = 'paid'
 ```
 
-Verify and webhook are both idempotent through the unique
-`payments.provider_reference`; whichever lands first wins and the other is a
-no-op. That is deliberate — the webhook covers the student who closes the app
-mid-payment, and the verify call gives the student who does come back an
-immediate answer instead of waiting on a webhook round trip.
+The signed webhook is authoritative; the browser redirect never marks an order
+paid. Yoco's `checkoutId` webhook metadata maps each event to its pending
+payment, and amount and currency are checked against the stored order amount.

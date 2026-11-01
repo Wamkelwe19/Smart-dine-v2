@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/error/app_error.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/utils/formatters.dart';
@@ -13,8 +14,10 @@ import '../../widgets/app_widgets.dart';
 /// handle dimensions, with separately maintained list builders.
 Future<void> showNotificationSheet(
   BuildContext context,
-  List<AppNotification> notices,
-) {
+  List<AppNotification> notices, {
+  Set<String> dismissedIds = const {},
+  required Future<void> Function(String id) onDismiss,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -25,50 +28,111 @@ Future<void> showNotificationSheet(
       expand: false,
       builder: (context, scrollController) => _NotificationList(
         notices: notices,
+        dismissedIds: dismissedIds,
+        onDismiss: onDismiss,
         controller: scrollController,
       ),
     ),
   );
 }
 
-class _NotificationList extends StatelessWidget {
-  const _NotificationList({required this.notices, required this.controller});
+class _NotificationList extends StatefulWidget {
+  const _NotificationList({
+    required this.notices,
+    required this.dismissedIds,
+    required this.onDismiss,
+    required this.controller,
+  });
 
   final List<AppNotification> notices;
+  final Set<String> dismissedIds;
+  final Future<void> Function(String id) onDismiss;
   final ScrollController controller;
+
+  @override
+  State<_NotificationList> createState() => _NotificationListState();
+}
+
+class _NotificationListState extends State<_NotificationList> {
+  late final Set<String> _dismissedIds = {...widget.dismissedIds};
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final visibleNotices = widget.notices
+        .where((notice) => !_dismissedIds.contains(notice.id))
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(
-              AppSpacing.gutter, 0, AppSpacing.gutter, AppSpacing.md),
+            AppSpacing.gutter,
+            0,
+            AppSpacing.gutter,
+            AppSpacing.md,
+          ),
           child: Text('Notices', style: theme.textTheme.titleLarge),
         ),
         Expanded(
-          child: notices.isEmpty
+          child: visibleNotices.isEmpty
               ? const EmptyState(
                   icon: Icons.notifications_none_rounded,
                   title: 'No notices yet',
                   message: 'Announcements from the cafeterias will show here.',
                 )
               : ListView.separated(
-                  controller: controller,
+                  controller: widget.controller,
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.gutter,
                     0,
                     AppSpacing.gutter,
                     AppSpacing.xxl,
                   ),
-                  itemCount: notices.length,
+                  itemCount: visibleNotices.length,
                   separatorBuilder: (_, _) =>
                       const SizedBox(height: AppSpacing.md),
-                  itemBuilder: (context, index) =>
-                      _NoticeCard(notice: notices[index]),
+                  itemBuilder: (context, index) {
+                    final notice = visibleNotices[index];
+                    return Dismissible(
+                      key: ValueKey(notice.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger,
+                          borderRadius: AppRadius.cardRadius,
+                        ),
+                        child: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.white,
+                        ),
+                      ),
+                      confirmDismiss: (_) async {
+                        try {
+                          await widget.onDismiss(notice.id);
+                          return true;
+                        } catch (error) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(AppError.from(error).message),
+                              ),
+                            );
+                          }
+                          return false;
+                        }
+                      },
+                      onDismissed: (_) {
+                        setState(() => _dismissedIds.add(notice.id));
+                      },
+                      child: _NoticeCard(notice: notice),
+                    );
+                  },
                 ),
         ),
       ],
@@ -122,8 +186,9 @@ class _NoticeCard extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     TimeAgo.format(notice.createdAt),
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: AppColors.textSecondary),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),

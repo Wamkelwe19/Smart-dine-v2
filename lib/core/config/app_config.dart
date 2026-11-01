@@ -9,7 +9,7 @@
 ///
 /// The Supabase *publishable* key is safe to ship in the client — it is visible
 /// in any compiled binary. Row level security is what actually protects the
-/// data. The Supabase *secret* / service-role key and the Paystack secret key
+/// data. The Supabase *secret* / service-role key and the Yoco secret key
 /// must never appear here; they belong in Edge Function secrets only.
 library;
 
@@ -20,12 +20,6 @@ class AppConfig {
 
   static const String supabasePublishableKey = String.fromEnvironment(
     'SUPABASE_PUBLISHABLE_KEY',
-  );
-
-  /// Paystack *public* key (pk_test_… / pk_live_…). Safe on the client; it can
-  /// only initialise a transaction, never verify or refund one.
-  static const String paystackPublicKey = String.fromEnvironment(
-    'PAYSTACK_PUBLIC_KEY',
   );
 
   /// Google OAuth client IDs. The web client ID is the audience Supabase
@@ -48,9 +42,6 @@ class AppConfig {
   /// True when Google sign-in has been configured for this build. The sign-in
   /// button is hidden rather than shown broken when it is false.
   static bool get isGoogleSignInConfigured => googleWebClientId.isNotEmpty;
-
-  /// True when card payment is available. Cash checkout still works without it.
-  static bool get isCardPaymentConfigured => paystackPublicKey.isNotEmpty;
 
   /// Fails fast at startup with an actionable message rather than surfacing an
   /// opaque Supabase error on the first query.

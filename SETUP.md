@@ -61,6 +61,10 @@ finish before starting the next:
 0006_rls.sql                   row level security on every table
 0007_storage_policies.sql      menu-images bucket policies
 0008_specials_and_cafeteria_images.sql   specials, discounted checkout, hall photos
+0009_varieties_combos_categories.sql    item options and categories
+0010_repair_orders.sql         repair order schema and policies
+0011_user_notifications.sql    per-user order notifications
+0012_yoco_payment_provider.sql Yoco default for new card payments
 ```
 
 Dining-hall photos can also be bundled with the app: see
@@ -119,17 +123,24 @@ Fill in `env.json` — it is gitignored:
 {
   "SUPABASE_URL": "https://sotsfjzdbnmrfcdifwmi.supabase.co",
   "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_...",
-  "PAYSTACK_PUBLIC_KEY": "",
   "GOOGLE_WEB_CLIENT_ID": "",
   "GOOGLE_IOS_CLIENT_ID": ""
 }
 ```
 
-Then:
+Then fetch the Flutter dependencies:
 
 ```bash
 flutter pub get
 ```
+
+To run without typing a command, open the project in VS Code, choose **UMP
+Smart Dine** in the Run and Debug configuration selector, then press **F5**
+(or choose **Run Without Debugging**). The project configuration passes
+`env.json` to Flutter automatically. You can also use the VS Code play button
+while `lib/main.dart` is open.
+
+From a terminal, the equivalent command is:
 
 ```bash
 flutter run --dart-define-from-file=env.json
@@ -143,54 +154,73 @@ the app is fully usable with cash checkout before you do Steps 4 and 5.
 
 ---
 
-## Step 4 — Card payment (Paystack)
+## Step 4 — Card payment (Yoco)
 
-Free test keys, no merchant account, no approval wait.
+The app uses Yoco's hosted Checkout API. The secret key is only used by
+Supabase Edge Functions; the app never handles card details.
 
 ### 4a. Get test keys
 
-1. Sign up at [paystack.com](https://paystack.com)
-2. **Settings → API Keys & Webhooks** (stay in **Test Mode**)
-3. Copy the **public** key (`pk_test_…`) into `env.json` as `PAYSTACK_PUBLIC_KEY`
+In your Yoco account, open the **Checkout API integration** and select **How to
+connect**. Use the test keys while developing:
+
+- Keep the **secret** key (`sk_test_...`) for Supabase; do not put it in the app
+  or `env.json`. Hosted Checkout is initialized by the server and does not need
+  a public Yoco key in the Flutter build.
 
 ### 4b. Deploy the Edge Functions
 
 ```bash
-supabase functions deploy paystack-initialize
+supabase functions deploy yoco-initialize
 ```
 
 ```bash
-supabase functions deploy paystack-verify
+supabase functions deploy yoco-verify
 ```
 
 ```bash
-supabase functions deploy paystack-webhook --no-verify-jwt
+supabase functions deploy yoco-webhook --no-verify-jwt
 ```
-
-`--no-verify-jwt` on the webhook only — Paystack calls it, not a signed-in user,
-so it authenticates by HMAC signature instead.
-
-### 4c. Set the secret key
 
 ```bash
-supabase secrets set PAYSTACK_SECRET_KEY=sk_test_your_key_here
+supabase functions deploy yoco-return --no-verify-jwt
 ```
 
-**The secret key never goes in `env.json`, in the app, or in this repository.**
-It lives only here.
+The initialize and verify functions require the signed-in user's JWT. The
+webhook and return endpoints are public: Yoco verifies webhook requests using a
+signed timestamped payload, and the return endpoint only redirects to the app.
+
+### 4c. Store the Yoco secret
+
+```bash
+supabase secrets set YOCO_SECRET_KEY=sk_test_your_key_here
+```
 
 ### 4d. Register the webhook
 
-Paystack dashboard → **Settings → API Keys & Webhooks → Webhook URL**:
+Register a Checkout API webhook at `https://payments.yoco.com/api/webhooks`
+with the notification URL:
 
 ```
-https://sotsfjzdbnmrfcdifwmi.supabase.co/functions/v1/paystack-webhook
+https://sotsfjzdbnmrfcdifwmi.supabase.co/functions/v1/yoco-webhook
 ```
+
+Use the Yoco **test secret key** for the authenticated registration request.
+Save the `secret` returned by Yoco (it starts with `whsec_`) in Supabase:
+
+```bash
+supabase secrets set YOCO_WEBHOOK_SECRET=whsec_your_webhook_secret
+```
+
+The webhook secret is shown only once. Never put either secret in the app,
+`env.json`, or this repository.
 
 ### 4e. Test it
 
-Use Paystack's test card: **4084 0840 8408 4081**, any future expiry, CVV `408`,
-OTP `123456`.
+Use Yoco's test card details from the **How to connect** section in your Yoco
+account. Confirm the webhook is registered and that Supabase has both secrets;
+payment status is only marked paid after a valid Yoco webhook confirms the
+amount and currency.
 
 ---
 
@@ -287,10 +317,10 @@ release build until the release SHA-1 is registered in Google Cloud.
 | Staff sees "No cafeteria assigned yet" | No `staff_cafeterias` row | Step 2c |
 | "You do not have permission to do that" | RLS working as intended | Check the staff binding, or that you are signed in as the right role |
 | Stock never comes back after abandoning a cart | pg_cron not scheduled | Step 2c |
-| Card tab greyed out | `PAYSTACK_PUBLIC_KEY` empty | Step 4a |
+| Card checkout does not open | Check the Edge Function deployment and `YOCO_SECRET_KEY` | Step 4 |
 | Google button missing | `GOOGLE_WEB_CLIENT_ID` empty | Step 5c |
 | Google sign-in opens the browser then hangs | Redirect URL not registered | Step 5b |
-| Payment succeeds but the order stays unpaid | Webhook not registered | Step 4d |
+| Payment succeeds but the order stays unpaid | Webhook not registered or its signing secret is missing | Step 4d |
 | Release APK cannot reach the network | Manifest missing `INTERNET` | Already fixed; rebuild |
 
 ---
@@ -305,7 +335,7 @@ lib/
   widgets/    shared components
 supabase/
   migrations/ ordered, idempotent SQL
-  functions/  Paystack Edge Functions
+  functions/  Yoco Checkout API Edge Functions
 test/         60 unit tests
 env.json      your local config (gitignored)
 ```

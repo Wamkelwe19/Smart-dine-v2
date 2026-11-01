@@ -38,7 +38,7 @@ dependencies:
   supabase_flutter: ^2.15.0
   image_picker: ^1.0.7
   shared_preferences: ^2.5.5
-  # Opens the Paystack hosted checkout page. Already present transitively via
+  # Opens the Yoco hosted checkout page. Already present transitively via
   # supabase_flutter, but declared explicitly because we import it directly.
   url_launcher: ^6.3.0
   app_links: 7.0.0
@@ -56,6 +56,27 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icons/launcher.png
+  remove_alpha_ios: true
+  adaptive_icon_background: "#FFF3E0"
+  adaptive_icon_foreground: assets/icons/launcher_foreground.png
+  adaptive_icon_foreground_inset: 0
+  web:
+    generate: true
+    image_path: assets/icons/launcher.png
+    background_color: "#FFF3E0"
+    theme_color: "#B35300"
+  windows:
+    generate: true
+    image_path: assets/icons/launcher.png
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: assets/icons/launcher.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

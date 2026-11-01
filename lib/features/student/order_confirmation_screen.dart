@@ -168,7 +168,7 @@ class OrderConfirmationScreen extends StatelessWidget {
           'at the counter when you collect.';
     }
     if (pending) {
-      return 'Paystack has not confirmed the payment yet. If you paid, your '
+      return 'Yoco has not confirmed the payment yet. If you paid, your '
           'order updates on its own shortly. Otherwise pay at the counter, or '
           'try card again from Orders.';
     }

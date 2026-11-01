@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Required for all Supabase, Paystack and image traffic. Previously this was
+    <!-- Required for all Supabase, Yoco and image traffic. Previously this was
          declared only in the debug and profile manifests, so release builds had no
          network access at all. -->
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -33,7 +33,7 @@
             </intent-filter>
 
             <!-- OAuth / payment redirect target. Supabase returns the auth session and
-                 Paystack (via the paystack-return function) the payment reference
+                 Yoco (via the yoco-return function) the payment reference
                  through this custom scheme.
 
                  singleTask, with the default task affinity, makes the browser's
@@ -64,7 +64,7 @@
             <data android:mimeType="text/plain"/>
         </intent>
         <!-- Required on API 30+ so url_launcher can resolve a browser / Custom Tab
-             for the Google sign-in and Paystack checkout flows. -->
+             for the Google sign-in and Yoco checkout flows. -->
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <category android:name="android.intent.category.BROWSABLE"/>

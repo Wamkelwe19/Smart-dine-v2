@@ -98,7 +98,7 @@ create index if not exists order_items_order_idx on public.order_items (order_id
 create table if not exists public.payments (
   id                 uuid primary key default gen_random_uuid(),
   order_id           uuid not null references public.orders (id) on delete cascade,
-  provider           text not null default 'paystack',
+  provider           text not null default 'yoco',
   provider_reference text not null unique,
   amount_cents       integer not null check (amount_cents >= 0),
   currency           text not null default 'ZAR',

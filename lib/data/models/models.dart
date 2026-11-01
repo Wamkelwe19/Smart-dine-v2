@@ -971,7 +971,7 @@ class Order {
   String get totalLabel => Money.format(totalCents);
 
   /// "Pay at counter" only makes sense for cash; a card order waiting on
-  /// Paystack reads differently.
+  /// Yoco reads differently.
   String get paymentLabel => switch (paymentState) {
         PaymentState.paid => 'Paid',
         PaymentState.failed => 'Card payment failed',

@@ -54,12 +54,16 @@ class _HomeTabState extends State<HomeTab> {
   List<MenuSpecial> _liveSpecials = const [];
 
   DateTime? _lastSeen;
+  Set<String> _dismissedNotificationIds = const {};
 
   @override
   void initState() {
     super.initState();
     _notifications.lastSeen().then((value) {
       if (mounted) setState(() => _lastSeen = value);
+    });
+    _notifications.dismissedIds(widget.profile.id).then((value) {
+      if (mounted) setState(() => _dismissedNotificationIds = value);
     });
     _listenToSpecials();
   }
@@ -103,6 +107,19 @@ class _HomeTabState extends State<HomeTab> {
   /// Items with varieties or combo choices open the options sheet first.
   Future<void> _addToCart(MenuItem item) =>
       addItemToCart(context, cart: widget.cart, item: item);
+
+  Future<void> _dismissNotification(String id) async {
+    await _notifications.dismiss(
+      userId: widget.profile.id,
+      notificationId: id,
+    );
+    if (mounted) {
+      setState(() => _dismissedNotificationIds = {
+            ..._dismissedNotificationIds,
+            id,
+          });
+    }
+  }
 
   void _openHall(Cafeteria cafeteria) {
     Navigator.of(context).push(
@@ -161,6 +178,8 @@ class _HomeTabState extends State<HomeTab> {
             repository: _notifications,
             role: UserRole.student,
             lastSeen: _lastSeen,
+            dismissedIds: _dismissedNotificationIds,
+            onDismiss: _dismissNotification,
             onOpened: (seenAt) => setState(() => _lastSeen = seenAt),
           ),
           const SizedBox(width: AppSpacing.sm),
@@ -528,12 +547,16 @@ class _NotificationBell extends StatelessWidget {
     required this.repository,
     required this.role,
     required this.lastSeen,
+    required this.dismissedIds,
+    required this.onDismiss,
     required this.onOpened,
   });
 
   final NotificationRepository repository;
   final UserRole role;
   final DateTime? lastSeen;
+  final Set<String> dismissedIds;
+  final Future<void> Function(String id) onDismiss;
   final ValueChanged<DateTime> onOpened;
 
   @override
@@ -541,7 +564,9 @@ class _NotificationBell extends StatelessWidget {
     return StreamBuilder<List<AppNotification>>(
       stream: repository.watch(role),
       builder: (context, snapshot) {
-        final notices = snapshot.data ?? const <AppNotification>[];
+        final notices = (snapshot.data ?? const <AppNotification>[])
+            .where((notice) => !dismissedIds.contains(notice.id))
+            .toList();
         final unread = NotificationRepository.hasUnread(notices, lastSeen);
 
         return IconButton(
@@ -550,7 +575,12 @@ class _NotificationBell extends StatelessWidget {
             final seenAt = await repository.markSeen();
             onOpened(seenAt);
             if (!context.mounted) return;
-            await showNotificationSheet(context, notices);
+            await showNotificationSheet(
+              context,
+              notices,
+              dismissedIds: dismissedIds,
+              onDismiss: onDismiss,
+            );
           },
           icon: Badge(
             isLabelVisible: unread,

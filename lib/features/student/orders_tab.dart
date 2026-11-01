@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/config/app_config.dart';
 import '../../core/error/app_error.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimens.dart';
@@ -225,7 +224,7 @@ class _OrderCardState extends State<_OrderCard> {
       case PaymentOutcome.pending:
       case PaymentOutcome.abandoned:
         context.showAppInfo(
-            'Paystack has not confirmed a payment yet. It updates on its own if you paid.');
+            'Yoco has not confirmed a payment yet. It updates on its own if you paid.');
     }
   }
 
@@ -250,7 +249,7 @@ class _OrderCardState extends State<_OrderCard> {
         order.paymentState != PaymentState.refunded &&
         order.status != OrderStatus.cancelled &&
         order.status != OrderStatus.collected;
-    final canPayByCard = unpaid && AppConfig.isCardPaymentConfigured;
+    final canPayByCard = unpaid;
     final canCheck = unpaid && order.paymentMethod == PaymentMethod.card;
 
     return Card(

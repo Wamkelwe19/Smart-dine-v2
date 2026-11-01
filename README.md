@@ -21,7 +21,8 @@ Built with Flutter and Supabase. Specified by `UMPSD-SRS-001` v1.0.
 - Build a cart; stock is reserved the moment an item goes in
 - Check out with cash at the counter or by card
 - Track an order from *new* through *preparing* and *ready* to *collected*
-- Read notices from the cafeterias
+- Read notices from the cafeterias and swipe to dismiss them; dismissals are
+  remembered on the device for each account
 
 **For staff**
 
@@ -43,7 +44,7 @@ lib/
   widgets/    shared components
 supabase/
   migrations/ the schema, in order, under version control
-  functions/  Paystack Edge Functions (Deno)
+  functions/  Yoco Checkout API Edge Functions (Deno)
 test/         60 unit tests
 ```
 
@@ -61,11 +62,9 @@ only to a cafeteria they are bound to through `staff_cafeterias`. Order status
 transitions and stock movements happen in `SECURITY DEFINER` functions, so a
 modified client cannot move an order backwards or invent stock.
 
-**The app never touches a card number.** Payment goes through Paystack's hosted
-checkout. Our own Edge Function then verifies the transaction server-to-server
-and re-checks the amount against the order before anything is marked paid, with
-a signed webhook as the authoritative backstop if the student closes the app
-mid-payment.
+**The app never touches a card number.** Payment goes through Yoco's hosted
+checkout. The signed webhook verifies the amount against the order before it is
+marked paid, including if the student closes the app mid-payment.
 
 ---
 
@@ -86,6 +85,10 @@ flutter analyze
 flutter test
 ```
 
+Launcher icons for Android, iOS, web, Windows, and macOS are generated from
+`assets/icons/launcher.png`. After replacing the artwork, run
+`dart run flutter_launcher_icons` to regenerate the platform icons.
+
 ---
 
 ## Status against the specification
@@ -98,8 +101,9 @@ screens (TBD-12) and the test coverage gap (TBD-14).
 
 Known gaps, honestly stated:
 
-- **Card payment needs Paystack test keys** and the Edge Functions deployed
-  before it does anything. Cash checkout works without them.
+- **Yoco card payment needs the test keys, webhook, and Edge Functions
+  configured** before it works. Cash checkout works without them; see
+  [SETUP.md](SETUP.md).
 - **Google sign-in needs OAuth clients registered.** The button hides itself
   until `GOOGLE_WEB_CLIENT_ID` is set.
 - **Release signing is still the debug keystore.** Google sign-in will not work

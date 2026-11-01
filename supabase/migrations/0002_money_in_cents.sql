@@ -2,7 +2,7 @@
 --
 -- Money moves to integer cents. The app currently reads `price` as a Dart
 -- `double` and multiplies it by quantity to build a cart total, which is a
--- rounding bug waiting to be found by an auditor. Paystack also expects the
+-- rounding bug waiting to be found by an auditor. Payment gateways expect the
 -- amount in the minor unit, so cents is the natural representation end to end.
 --
 -- Both columns are kept during the transition. `price` remains the source of

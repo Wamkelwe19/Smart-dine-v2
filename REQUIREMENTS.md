@@ -24,7 +24,7 @@ before resubmission, because a reader checking them will find the discrepancy.
 | REQ-83 | Partial | **Implemented** — it did revert on failure; the SRS under-claimed | Implemented |
 
 REQ-56 and REQ-57 (card number, expiry and CVV validation) are **superseded**.
-The card is now collected by Paystack's hosted page, so the app never holds it.
+The card is now collected by Yoco's hosted page, so the app never holds it.
 That satisfies REQ-58 more completely than the previous validated-but-inert form
 did, and removes the PCI-DSS exposure. The old implementation was also broken:
 `LengthLimitingTextInputFormatter(16)` counted the dashes its own formatter
@@ -52,7 +52,7 @@ inserted, so a real 16-digit card could not be typed, and the CVV field was hard
 | REQ-52 | Cart survives a restart | `stock_reservations` is the cart |
 | REQ-53 | One cart, one cafeteria | `place_order` + `CartController.spansMultipleCafeterias` |
 | REQ-59 | No checkout of an empty cart | `place_order` line-count check |
-| REQ-60 | Authorise through a gateway, confirm on approval | `paystack-initialize` / `paystack-verify` |
+| REQ-60 | Authorise through a gateway, confirm on approval | `yoco-initialize` / signed `yoco-webhook` / `yoco-verify` |
 | REQ-61 | Issue a collection reference | `gen_collection_ref` (0003), `order_confirmation_screen.dart` |
 | REQ-62–69 | The whole order lifecycle | 0003, 0004, `queue_tab.dart`, `orders_tab.dart` |
 | REQ-74 | Reject negative price and stock | DB constraints (0001) + `Validators` |
@@ -98,9 +98,9 @@ Being straight about this, because it matters for a demonstration:
 1. **The migrations have not been applied to a live database.** They parse
    cleanly and are written to be idempotent, but they are unverified until
    someone runs them. Apply them to a development project first if you can.
-2. **The Edge Functions have not been deployed**, and Paystack has not been
-   exercised end to end. Card checkout will fail until Step 4 of SETUP.md is
-   done; cash checkout does not depend on it.
+2. **The Yoco Edge Functions and webhook have not been deployed or exercised
+   end to end.** Card checkout will fail until Step 4 of SETUP.md is done; cash
+   checkout does not depend on it.
 3. **Google sign-in has not been exercised**, and needs OAuth clients
    registered. The button hides itself until it is configured.
 4. **No Android or iOS build has been produced on this machine** — there is no
